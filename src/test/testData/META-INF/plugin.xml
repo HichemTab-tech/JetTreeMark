@@ -1,0 +1,32 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.github.hichemtabtech.jettreemark</id>
+    <name>JetTreeMark</name>
+    <vendor>hichemtab-tech</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <resource-bundle>messages.JetTreeMarkBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                factoryClass="com.github.hichemtabtech.jettreemark.toolwindow.TreeViewToolWindowFactory"
+                id="Tree View"
+                icon="/icons/pluginIcon.svg"
+        />
+    </extensions>
+
+    <actions>
+        <action
+                id="JetTreeMark.ShowTreeView"
+                class="com.github.hichemtabtech.jettreemark.actions.FolderTreeViewAction"
+                icon="/icons/pluginIcon.svg"
+        >
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
+        </action>
+    </actions>
+
+    <applicationListeners>
+        <listener class="com.github.hichemtabtech.jettreemark.listeners.ApplicationStartupListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    </applicationListeners>
+</idea-plugin>
