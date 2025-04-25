@@ -5,14 +5,11 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.actionSystem.Presentation;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.wm.ToolWindow;
-import com.intellij.openapi.wm.ToolWindowManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -31,12 +28,6 @@ public class FolderTreeViewActionTest {
     
     @Mock
     private Presentation mockPresentation;
-    
-    @Mock
-    private ToolWindowManager mockToolWindowManager;
-    
-    @Mock
-    private ToolWindow mockToolWindow;
     
     private FolderTreeViewAction action;
 

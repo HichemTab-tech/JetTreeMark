@@ -27,15 +27,4 @@ public final class JetTreeMarkBundle extends DynamicBundle {
     public static String message(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key, Object @NotNull ... params) {
         return INSTANCE.getMessage(key, params);
     }
-
-    /**
-     * Gets a lazy message from the bundle.
-     *
-     * @param key    the key of the message
-     * @param params the parameters for the message
-     * @return the lazy message
-     */
-    public static @NotNull Object messagePointer(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key, Object @NotNull ... params) {
-        return INSTANCE.getLazyMessage(key, params);
-    }
 }
