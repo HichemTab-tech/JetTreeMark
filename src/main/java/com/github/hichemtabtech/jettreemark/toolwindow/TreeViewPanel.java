@@ -1,6 +1,7 @@
 package com.github.hichemtabtech.jettreemark.toolwindow;
 
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPanel;
 import com.intellij.ui.components.JBScrollPane;
@@ -18,7 +19,11 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
+import javax.swing.SwingWorker;
 
 import static java.util.logging.Logger.getLogger;
 
@@ -98,59 +103,17 @@ public class TreeViewPanel {
      * @param folder the folder to add
      */
     public void addFolderToTreeView(@NotNull VirtualFile folder) {
-        // Create a tree model for the folder with checkbox nodes
-        CheckboxTreeNode rootNode = new CheckboxTreeNode(folder.getName());
-        buildTreeNodes(rootNode, folder);
+        // Increment tab counter
+        tabCounter++;
 
-        DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
-        Tree tree = new Tree(treeModel);
+        // Create and start the tree builder worker
+        TreeBuilderWorker worker = new TreeBuilderWorker(folder);
 
-        // Set the cell renderer to display checkboxes
-        tree.setCellRenderer(new CheckboxTreeCellRenderer());
+        // Show loading panel first
+        worker.showLoadingPanel();
 
-        // Add mouse listener to handle checkbox clicks
-        tree.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                int x = e.getX();
-                int y = e.getY();
-                int row = tree.getRowForLocation(x, y);
-
-                if (row != -1) {
-                    TreePath path = tree.getPathForRow(row);
-                    if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                        Rectangle checkBoxBounds = tree.getRowBounds(row);
-
-                        // Check if click was on the checkbox (roughly the first 20 pixels)
-                        if (x <= checkBoxBounds.x + 20) {
-                            // Cycle through the states: UNCHECKED -> CHECKED -> UNCHECKED
-                            // We don't directly set INDETERMINATE state via clicks, it's determined by children
-                            if (node.getCheckState() == CheckboxTreeNode.CHECKED) {
-                                node.setCheckState(CheckboxTreeNode.UNCHECKED);
-                            } else {
-                                node.setCheckState(CheckboxTreeNode.CHECKED);
-                            }
-                            // Repaint the tree
-                            tree.repaint();
-                        }
-                    }
-                }
-            }
-        });
-
-        // Create a panel for the tree view and copy button
-        JPanel treePanel = createTreeViewPanel(tree, rootNode);
-
-        // Add a new tab with the tree view
-        String tabTitle = folder.getName() + " (" + tabCounter++ + ")";
-        tabbedPane.addTab(tabTitle, treePanel);
-
-        // Add close button to the tab
-        int tabIndex = tabbedPane.getTabCount() - 1;
-        tabbedPane.setTabComponentAt(tabIndex, createTabComponent(tabTitle));
-
-        // Select the new tab
-        tabbedPane.setSelectedIndex(tabIndex);
+        // Execute the worker to start building the tree in the background
+        worker.execute();
     }
 
     private @NotNull JPanel createTreeViewPanel(Tree tree, CheckboxTreeNode rootNode) {
@@ -304,26 +267,152 @@ public class TreeViewPanel {
     }
 
     /**
-     * Recursively builds tree nodes for a folder.
-     *
-     * @param parentNode the parent node
-     * @param parentFile the parent file
+     * SwingWorker implementation for asynchronous tree building.
+     * This prevents UI freezing when loading large directory structures.
      */
-    private void buildTreeNodes(DefaultMutableTreeNode parentNode, VirtualFile parentFile) {
-        VirtualFile[] children = parentFile.getChildren();
-        for (VirtualFile child : children) {
-            // Create a CheckboxTreeNode if the parent is a CheckboxTreeNode, otherwise use DefaultMutableTreeNode
-            DefaultMutableTreeNode childNode;
-            if (parentNode instanceof CheckboxTreeNode) {
-                childNode = new CheckboxTreeNode(child.getName());
-            } else {
-                childNode = new DefaultMutableTreeNode(child.getName());
-            }
-            parentNode.add(childNode);
+    private class TreeBuilderWorker extends SwingWorker<DefaultMutableTreeNode, Void> {
+        private final VirtualFile rootFolder;
+        private final String rootName;
+        private int tabIndex;
 
-            if (child.isDirectory()) {
-                buildTreeNodes(childNode, child);
+        public TreeBuilderWorker(VirtualFile rootFolder) {
+            this.rootFolder = rootFolder;
+            this.rootName = rootFolder.getName();
+        }
+
+        @Override
+        protected DefaultMutableTreeNode doInBackground() {
+            // Create root node
+            CheckboxTreeNode rootNode = new CheckboxTreeNode(rootName);
+
+            // Build tree structure in the background
+            buildTreeNodesAsync(rootNode, rootFolder);
+
+            return rootNode;
+        }
+
+        /**
+         * Non-recursive version of buildTreeNodes to avoid stack overflow with large directories
+         */
+        private void buildTreeNodesAsync(DefaultMutableTreeNode parentNode, VirtualFile parentFile) {
+            List<Object[]> stack = new ArrayList<>();
+            stack.add(new Object[]{parentNode, parentFile});
+
+            while (!stack.isEmpty()) {
+                Object[] current = stack.remove(stack.size() - 1);
+                DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode) current[0];
+                VirtualFile currentFile = (VirtualFile) current[1];
+
+                VirtualFile[] children = currentFile.getChildren();
+                for (VirtualFile child : children) {
+                    // Create a CheckboxTreeNode if the parent is a CheckboxTreeNode,
+                    // otherwise use DefaultMutableTreeNode
+                    DefaultMutableTreeNode childNode;
+                    if (currentNode instanceof CheckboxTreeNode) {
+                        childNode = new CheckboxTreeNode(child.getName());
+                    } else {
+                        childNode = new DefaultMutableTreeNode(child.getName());
+                    }
+                    currentNode.add(childNode);
+
+                    if (child.isDirectory()) {
+                        // Add to the stack instead of recursing
+                        stack.add(new Object[]{childNode, child});
+                    }
+                }
             }
+        }
+
+        @Override
+        protected void done() {
+            try {
+                // Get the built tree root node
+                DefaultMutableTreeNode rootNode = get();
+
+                // Create a tree model and tree
+                DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
+                Tree tree = getTree(treeModel);
+
+                // Create a panel for the tree view and copy button
+                JPanel treePanel = createTreeViewPanel(tree, (CheckboxTreeNode) rootNode);
+
+                // Replace the loading panel with the tree panel
+                tabbedPane.setComponentAt(tabIndex, treePanel);
+
+                // Update the tab title to remove "Loading..." text
+                String tabTitle = rootName + " (" + (tabCounter - 1) + ")";
+                tabbedPane.setTitleAt(tabIndex, tabTitle);
+                tabbedPane.setTabComponentAt(tabIndex, createTabComponent(tabTitle));
+
+            } catch (InterruptedException | ExecutionException e) {
+                logger.severe("Error building tree: " + e.getMessage());
+                // Show error in the tab
+                JLabel errorLabel = new JLabel("Error loading directory: " + e.getMessage());
+                errorLabel.setForeground(JBColor.RED);
+                tabbedPane.setComponentAt(tabIndex, errorLabel);
+            }
+        }
+
+        private static @NotNull Tree getTree(DefaultTreeModel treeModel) {
+            Tree tree = new Tree(treeModel);
+
+            // Set the cell renderer to display checkboxes
+            tree.setCellRenderer(new CheckboxTreeCellRenderer());
+
+            // Add mouse listener to handle checkbox clicks
+            tree.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    int x = e.getX();
+                    int y = e.getY();
+                    int row = tree.getRowForLocation(x, y);
+
+                    if (row != -1) {
+                        TreePath path = tree.getPathForRow(row);
+                        if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                            Rectangle checkBoxBounds = tree.getRowBounds(row);
+
+                            // Check if click was on the checkbox (roughly the first 20 pixels)
+                            if (x <= checkBoxBounds.x + 20) {
+                                // Cycle through the states: UNCHECKED -> CHECKED -> UNCHECKED
+                                if (node.getCheckState() == CheckboxTreeNode.CHECKED) {
+                                    node.setCheckState(CheckboxTreeNode.UNCHECKED);
+                                } else {
+                                    node.setCheckState(CheckboxTreeNode.CHECKED);
+                                }
+                                // Repaint the tree
+                                tree.repaint();
+                            }
+                        }
+                    }
+                }
+            });
+            return tree;
+        }
+
+        /**
+         * Creates and shows a loading panel in a new tab
+         */
+        public void showLoadingPanel() {
+            JPanel loadingPanel = new JPanel(new BorderLayout());
+            JLabel loadingLabel = new JLabel("Loading " + rootName + "...", SwingConstants.CENTER);
+
+            // Add a spinner icon
+            JProgressBar progressBar = new JProgressBar();
+            progressBar.setIndeterminate(true);
+
+            loadingPanel.add(loadingLabel, BorderLayout.CENTER);
+            loadingPanel.add(progressBar, BorderLayout.SOUTH);
+
+            // Add a new tab with the loading panel
+            String tabTitle = rootName + " (Loading...)";
+            tabbedPane.addTab(tabTitle, loadingPanel);
+
+            // Store the tab index for later use
+            tabIndex = tabbedPane.getTabCount() - 1;
+
+            // Select the new tab
+            tabbedPane.setSelectedIndex(tabIndex);
         }
     }
 }
