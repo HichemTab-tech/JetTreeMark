@@ -1,6 +1,7 @@
 package com.github.hichemtabtech.jettreemark.actions;
 
 import com.github.hichemtabtech.jettreemark.toolwindow.TreeViewToolWindowFactory;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -36,7 +37,7 @@ public class FolderTreeViewAction extends AnAction {
         // Ensure the tool window is visible
         toolWindow.show(() -> {
             // Add the folder to the tree view
-            TreeViewToolWindowFactory.addFolderToTreeView(project, toolWindow, selectedFile);
+            TreeViewToolWindowFactory.addFolderToTreeView(project, selectedFile);
         });
     }
 
@@ -48,5 +49,10 @@ public class FolderTreeViewAction extends AnAction {
         e.getPresentation().setEnabledAndVisible(
                 project != null && selectedFile != null && selectedFile.isDirectory()
         );
+    }
+
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.EDT;
     }
 }

@@ -36,10 +36,9 @@ public class TreeViewToolWindowFactory implements ToolWindowFactory {
      * Adds a folder to the tree view.
      *
      * @param project    the project
-     * @param toolWindow the tool window
      * @param folder     the folder to add
      */
-    public static void addFolderToTreeView(@NotNull Project project, @NotNull ToolWindow toolWindow, @NotNull VirtualFile folder) {
+    public static void addFolderToTreeView(@NotNull Project project, @NotNull VirtualFile folder) {
         TreeViewPanel panel = projectPanels.get(project);
         if (panel != null) {
             panel.addFolderToTreeView(folder);
