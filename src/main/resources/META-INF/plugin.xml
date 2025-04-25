@@ -9,14 +9,19 @@
     <resource-bundle>messages.JetTreeMarkBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hichemtabtech.jettreemark.toolwindow.TreeViewToolWindowFactory" id="Tree View"/>
+        <toolWindow
+                factoryClass="com.github.hichemtabtech.jettreemark.toolwindow.TreeViewToolWindowFactory"
+                id="Tree View"
+                icon="/icons/pluginIcon.svg"
+        />
     </extensions>
 
     <actions>
-        <action id="JetTreeMark.ShowTreeView"
+        <action
+                id="JetTreeMark.ShowTreeView"
                 class="com.github.hichemtabtech.jettreemark.actions.FolderTreeViewAction"
-                text="Show Tree View"
-                description="Show a tree view of the selected folder">
+                icon="/icons/pluginIcon.svg"
+        >
             <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
         </action>
     </actions>
