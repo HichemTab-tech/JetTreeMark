@@ -6,13 +6,22 @@
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.JetTreeMarkBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.hichemtabtech.jettreemark.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
+        <toolWindow factoryClass="com.github.hichemtabtech.jettreemark.toolwindow.TreeViewToolWindowFactory" id="Tree View"/>
     </extensions>
 
+    <actions>
+        <action id="JetTreeMark.ShowTreeView"
+                class="com.github.hichemtabtech.jettreemark.actions.FolderTreeViewAction"
+                text="Show Tree View"
+                description="Show a tree view of the selected folder">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="after" relative-to-action="WeighingNewGroup"/>
+        </action>
+    </actions>
+
     <applicationListeners>
-        <listener class="com.github.hichemtabtech.jettreemark.listeners.MyApplicationActivationListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+        <listener class="com.github.hichemtabtech.jettreemark.listeners.ApplicationStartupListener" topic="com.intellij.openapi.application.ApplicationActivationListener"/>
     </applicationListeners>
 </idea-plugin>
