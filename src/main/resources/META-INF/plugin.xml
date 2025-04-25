@@ -2,7 +2,31 @@
 <idea-plugin>
     <id>com.github.hichemtabtech.jettreemark</id>
     <name>JetTreeMark</name>
-    <vendor>hichemtab-tech</vendor>
+    <vendor email="hichemtabtech@gmail.com" url="https://github.com/HichemTab-tech">hichemtab-tech</vendor>
+    <version>0.0.1</version>
+
+    <description><![CDATA[
+      JetTreeMark is a plugin for IntelliJ IDEA that generates a copiable tree view representation of your project's folder structure. 
+      When you select a folder in the project tool window, JetTreeMark displays a formatted tree view that you can easily copy and share with others.
+
+      <h3>Features:</h3>
+      <ul>
+        <li>Display a tree view of folders and files when selecting a folder in the project tool window</li>
+        <li>Copy the tree view to clipboard</li>
+        <li>Customize the tree view display with checkboxes to include/exclude files and folders</li>
+        <li>Multiple tabs support for comparing different folder structures</li>
+      </ul>
+    ]]></description>
+
+    <change-notes><![CDATA[
+      <h3>0.0.1</h3>
+      <ul>
+        <li>Initial release</li>
+        <li>Basic tree view functionality</li>
+        <li>Copy to clipboard feature</li>
+        <li>Checkbox selection for files and folders</li>
+      </ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
 

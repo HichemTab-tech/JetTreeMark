@@ -1,8 +1,8 @@
 # JetTreeMark
 
 ![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+[![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ## Description
 
@@ -32,22 +32,22 @@ JetTreeMark is a plugin for IntelliJ IDEA that generates a copiable tree view re
 
 ## Installation
 
-- Using the IDE built-in plugin system:
+> **Note:** The plugin is not yet available on the JetBrains Marketplace. You can install it manually from the GitHub releases.
 
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "JetTreeMark"</kbd> >
-  <kbd>Install</kbd>
+### Manual Installation
 
-- Using JetBrains Marketplace:
+1. Download the [latest release](https://github.com/HichemTab-tech/JetTreeMark/releases/latest) from GitHub
+2. In IntelliJ IDEA, go to <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+3. Select the downloaded ZIP file
+4. Restart the IDE when prompted
 
-  Go to [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID) and install it by clicking the <kbd>Install to ...</kbd> button in case your IDE is running.
+### Build from Source
 
-  You can also download the [latest release](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID/versions) from JetBrains Marketplace and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
-
-- Manually:
-
-  Download the [latest release](https://github.com/HichemTab-tech/JetTreeMark/releases/latest) and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+1. Clone the repository: `git clone https://github.com/HichemTab-tech/JetTreeMark.git`
+2. Open the project in IntelliJ IDEA
+3. Build the plugin: `./gradlew buildPlugin`
+4. The plugin ZIP file will be available in `build/distributions/`
+5. Install the plugin as described in the Manual Installation section
 
 
 ---
