@@ -1,5 +1,6 @@
 package com.github.hichemtabtech.jettreemark.toolwindow;
 
+import com.github.hichemtabtech.jettreemark.JetTreeMarkBundle;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
@@ -32,7 +33,7 @@ import static java.util.logging.Logger.getLogger;
  */
 public class TreeViewPanel {
     private static final String GITHUB_URL = "https://github.com/HichemTab-tech";
-    private static final String MESSAGE = "Welcome to JetTreeMark!";
+    private static final String MESSAGE = JetTreeMarkBundle.message("welcome_to_jet_tree_mark");
     private static final String GITHUB_LINK_TEXT = "Visit HichemTab-tech on GitHub";
 
     private final JBTabbedPane tabbedPane;
@@ -42,7 +43,7 @@ public class TreeViewPanel {
     public TreeViewPanel() {
         tabbedPane = new JBTabbedPane();
         JPanel welcomePanel = createWelcomePanel();
-        tabbedPane.addTab("Welcome", welcomePanel);
+        tabbedPane.addTab(JetTreeMarkBundle.message("welcome"), welcomePanel);
         // Welcome tab is not closable
     }
 
@@ -125,7 +126,7 @@ public class TreeViewPanel {
 
         // Create a panel for the copy button
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton copyButton = new JButton("Copy Tree");
+        JButton copyButton = new JButton(JetTreeMarkBundle.message("copy_tree"));
         copyButton.addActionListener(e -> {
             // Generate text representation of the tree with only checked nodes
             String treeText = generateTreeText(rootNode, "", true);
@@ -136,8 +137,8 @@ public class TreeViewPanel {
             clipboard.setContents(stringSelection, null);
 
             // Provide visual feedback
-            copyButton.setText("Copied!");
-            Timer timer = new Timer(1500, event -> copyButton.setText("Copy Tree"));
+            copyButton.setText(JetTreeMarkBundle.message("copied"));
+            Timer timer = new Timer(1500, event -> copyButton.setText(JetTreeMarkBundle.message("copy_tree")));
             timer.setRepeats(false);
             timer.start();
         });
@@ -245,7 +246,7 @@ public class TreeViewPanel {
         // Create the close button
         JButton closeButton = new JButton("×");
         closeButton.setPreferredSize(new Dimension(16, 16));
-        closeButton.setToolTipText("Close this tab");
+        closeButton.setToolTipText(JetTreeMarkBundle.message("close_this_tab"));
         closeButton.setContentAreaFilled(false);
         closeButton.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         closeButton.setBorderPainted(false);
@@ -347,7 +348,7 @@ public class TreeViewPanel {
             } catch (InterruptedException | ExecutionException e) {
                 logger.severe("Error building tree: " + e.getMessage());
                 // Show error in the tab
-                JLabel errorLabel = new JLabel("Error loading directory: " + e.getMessage());
+                JLabel errorLabel = new JLabel(JetTreeMarkBundle.message("errors.unable_to_load_directory")+": " + e.getMessage());
                 errorLabel.setForeground(JBColor.RED);
                 tabbedPane.setComponentAt(tabIndex, errorLabel);
             }
@@ -395,7 +396,7 @@ public class TreeViewPanel {
          */
         public void showLoadingPanel() {
             JPanel loadingPanel = new JPanel(new BorderLayout());
-            JLabel loadingLabel = new JLabel("Loading " + rootName + "...", SwingConstants.CENTER);
+            JLabel loadingLabel = new JLabel(JetTreeMarkBundle.message("loading_of.text") + " " + rootName + "...", SwingConstants.CENTER);
 
             // Add a spinner icon
             JProgressBar progressBar = new JProgressBar();
@@ -405,7 +406,7 @@ public class TreeViewPanel {
             loadingPanel.add(progressBar, BorderLayout.SOUTH);
 
             // Add a new tab with the loading panel
-            String tabTitle = rootName + " (Loading...)";
+            String tabTitle = rootName + JetTreeMarkBundle.message("loading.text");
             tabbedPane.addTab(tabTitle, loadingPanel);
 
             // Store the tab index for later use

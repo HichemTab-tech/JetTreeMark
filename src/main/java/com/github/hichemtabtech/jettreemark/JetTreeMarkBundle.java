@@ -10,7 +10,7 @@ import org.jetbrains.annotations.PropertyKey;
  */
 public final class JetTreeMarkBundle extends DynamicBundle {
     @NonNls
-    private static final String BUNDLE = "messages.MyBundle";
+    private static final String BUNDLE = "messages.JetTreeMarkBundle";
     private static final JetTreeMarkBundle INSTANCE = new JetTreeMarkBundle();
 
     private JetTreeMarkBundle() {
