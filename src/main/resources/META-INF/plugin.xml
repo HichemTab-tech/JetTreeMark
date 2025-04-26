@@ -3,7 +3,7 @@
     <id>com.github.hichemtabtech.jettreemark</id>
     <name>JetTreeMark</name>
     <vendor email="hichemtabtech@gmail.com" url="https://github.com/HichemTab-tech">hichemtab-tech</vendor>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
 
     <description><![CDATA[
       JetTreeMark is a plugin for IntelliJ IDEA that generates a copiable tree view representation of your project's folder structure. 
@@ -19,7 +19,7 @@
     ]]></description>
 
     <change-notes><![CDATA[
-      <h3>0.0.1</h3>
+      <h3>0.0.2</h3>
       <ul>
         <li>Initial release</li>
         <li>Basic tree view functionality</li>
