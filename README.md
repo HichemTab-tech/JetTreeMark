@@ -4,6 +4,7 @@
 [![Version](https://img.shields.io/badge/version-0.0.1-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases) [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ---
+
 <!-- Plugin description -->
 ## 🚀 What is JetTreeMark?
 
@@ -66,6 +67,24 @@ Perfect for sharing your project structure, documentation, code reviews, or just
    ```
 4. Find your plugin zip inside `build/distributions/`
 5. Install it manually as described above
+
+---
+
+## 🎯 How to Use
+
+1. **Right-click** on any folder inside your Project tool window.
+2. Select **"Show Tree View"** from the context menu.
+
+   ![How to use the JetTreeMark plugin from folder context menu](meta/screenshot-1.png "Screenshot -JetTreeMark in context menu-")
+
+3. A **JetTreeMark Tool Window** will open, showing the folder structure.
+4. **Optionally**, select which files or folders you want to **exclude** from the final tree.
+
+   ![How to use the JetTreeMark plugin to exclude nodes from the tree view result](meta/screenshot-2.png "Screenshot - filter nodes from tree results -")
+
+5. Click the **"Copy Tree"** button at the bottom to copy the tree view to your clipboard. 🚀
+
+That's it! You can now paste your clean project structure anywhere you like.
 
 ---
 

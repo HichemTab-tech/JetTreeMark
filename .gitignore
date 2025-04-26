@@ -7,3 +7,4 @@ build
 private_encrypted.pem
 private.pem
 chain.crt
+img.png
