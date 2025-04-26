@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE buildprofiles SYSTEM "https://resources.jetbrains.com/writerside/1.0/build-profiles.dtd">
+<buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+    <variables/>
+    <build-profile instance="jd">
+        <variables>
+            <showDownloadButton>true</showDownloadButton>
+            <download-page>https://plugins.jetbrains.com/plugin/27198-jettreemark</download-page>
+            <download-title>Get JetTreeMark</download-title>
+            <header-logo>../../src/main/resources/icons/pluginIcon.svg</header-logo>
+            <custom-favicons>../../src/main/resources/icons/pluginIcon.svg</custom-favicons>
+            <primary-color>emerald</primary-color>
+            <noindex-content>false</noindex-content>
+        </variables>
+        <footer>
+            <social type="github" href="https://github.com/HichemTab-tech/JetTreeMark/">JetTreeMark source code</social>
+        </footer>
+        <sitemap priority="0.35" change-frequency="monthly"/>
+    </build-profile>
+
+</buildprofiles>
