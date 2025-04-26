@@ -300,7 +300,7 @@ public class TreeViewPanel {
             stack.add(new Object[]{parentNode, parentFile});
 
             while (!stack.isEmpty()) {
-                Object[] current = stack.remove(stack.size() - 1);
+                Object[] current = stack.removeLast();
                 DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode) current[0];
                 VirtualFile currentFile = (VirtualFile) current[1];
 
