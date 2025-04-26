@@ -4,3 +4,6 @@
 .qodana
 build
 .kotlin
+private_encrypted.pem
+private.pem
+chain.crt
