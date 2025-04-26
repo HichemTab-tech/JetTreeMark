@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  INSTANCE: 'JetTreeMark/jd'
+  INSTANCE: 'Writerside/jd'
   DOCKER_VERSION: '2025.04.8412'
 
 jobs:
