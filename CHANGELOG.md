@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+## [1.0.0] - 2025-04-29
+
+- Changelog update - `v0.0.2` by @github-actions in https://github.com/HichemTab-tech/JetTreeMark/pull/22
+- Bump org.jetbrains:marketplace-zip-signer from 0.1.8 to 0.1.34 by @dependabot in https://github.com/HichemTab-tech/JetTreeMark/pull/23
+- Bump actions/configure-pages from 4 to 5 by @dependabot in https://github.com/HichemTab-tech/JetTreeMark/pull/24
+- Bump org.mockito:mockito-core from 5.3.1 to 5.17.0 by @dependabot in https://github.com/HichemTab-tech/JetTreeMark/pull/25
+- @github-actions made their first contribution in https://github.com/HichemTab-tech/JetTreeMark/pull/22
+
 ## [0.0.2] - 2025-04-26
 
 ### What's included:
@@ -31,6 +39,7 @@
 
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
 
-[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.2...v1.0.0
 [0.0.2]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/HichemTab-tech/JetTreeMark/commits/v0.0.1
