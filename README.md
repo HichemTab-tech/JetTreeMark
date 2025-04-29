@@ -1,7 +1,8 @@
 # JetTreeMark
 
-![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)  
-[![Version](https://img.shields.io/badge/version-0.0.2-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases) [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
+![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ---
 
@@ -43,7 +44,22 @@ Perfect for sharing your project structure, documentation, code reviews, or just
 
 ## 🛠️ Installation
 
-> **Note:** JetTreeMark is not yet available on the JetBrains Marketplace. You can install it manually for now.
+JetTreeMark is now available on the JetBrains Marketplace! 🎉
+
+### Marketplace Installation
+
+1. Open IntelliJ IDEA or any Jetbrains IDE.
+2. Go to **Settings/Preferences → Plugins → Marketplace**.
+3. Search for **JetTreeMark**.
+4. Click **Install** and restart the IDE when prompted.
+
+Or you can find it directly [here](https://plugins.jetbrains.com/plugin/27198-jettreemark).
+
+### VS Code Availability
+
+JetTreeMark is also available for **VS Code**!
+🎉  
+You can find it on the Visual Studio Code Marketplace [here](https://marketplace.visualstudio.com/items?itemName=HichemTab-tech.jettreemark).
 
 ### Manual Installation
 
