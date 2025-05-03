@@ -284,7 +284,7 @@ public class TreeViewPanel {
         @Override
         protected DefaultMutableTreeNode doInBackground() {
             // Create root node
-            CheckboxTreeNode rootNode = new CheckboxTreeNode(rootName);
+            CheckboxTreeNode rootNode = new CheckboxTreeNode(rootName, true);
 
             // Build tree structure in the background
             buildTreeNodesAsync(rootNode, rootFolder);
@@ -310,7 +310,7 @@ public class TreeViewPanel {
                     // otherwise use DefaultMutableTreeNode
                     DefaultMutableTreeNode childNode;
                     if (currentNode instanceof CheckboxTreeNode) {
-                        childNode = new CheckboxTreeNode(child.getName());
+                        childNode = new CheckboxTreeNode(child.getName(), child.isDirectory());
                     } else {
                         childNode = new DefaultMutableTreeNode(child.getName());
                     }
@@ -360,7 +360,142 @@ public class TreeViewPanel {
             // Set the cell renderer to display checkboxes
             tree.setCellRenderer(new CheckboxTreeCellRenderer());
 
-            // Add mouse listener to handle checkbox clicks
+            // Create a popup menu for tree operations
+            JPopupMenu popupMenu = new JPopupMenu(JetTreeMarkBundle.message("context_menu.title"));
+
+            // Add menu items for tree operations (all levels)
+            JMenuItem checkAllChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_children"));
+            JMenuItem checkAllFoldersItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_folders"));
+            JMenuItem uncheckAllChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.uncheck_all_children"));
+            JMenuItem checkWithoutChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_without_children"));
+            JMenuItem expandAllItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.expand_all"));
+            JMenuItem collapseAllItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.collapse_all"));
+
+            // Create a submenu for level-specific operations
+            JMenu levelOperationsMenu = new JMenu(JetTreeMarkBundle.message("context_menu.level_operations"));
+            JMenuItem checkOnlyFoldersThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_only_folders_this_level"));
+            JMenuItem checkOnlyFilesThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_only_files_this_level"));
+            JMenuItem checkAllThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_children_this_level"));
+
+            // Add action listeners to menu items (all levels)
+            checkAllChildrenItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.checkAll(true);
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).checkAll();
+                    }
+                }
+                tree.repaint();
+            });
+
+            checkAllFoldersItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.checkOnlyFolders();
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).checkOnlyFolders();
+                    }
+                }
+                tree.repaint();
+            });
+
+            uncheckAllChildrenItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.uncheckAll();
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).uncheckAll();
+                    }
+                }
+                tree.repaint();
+            });
+
+            checkWithoutChildrenItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.setCheckState(CheckboxTreeNode.CHECKED, false);
+                    tree.repaint();
+                }
+            });
+
+            // Add action listeners to level-specific menu items
+            checkOnlyFoldersThisLevelItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.checkOnlyFolders(false);
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).checkOnlyFolders(false);
+                    }
+                }
+                tree.repaint();
+            });
+
+            checkOnlyFilesThisLevelItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.checkOnlyFiles(false);
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).checkOnlyFiles(false);
+                    }
+                }
+                tree.repaint();
+            });
+
+            checkAllThisLevelItem.addActionListener(e -> {
+                TreePath path = tree.getSelectionPath();
+                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    node.checkAll(false);
+                } else {
+                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
+                    if (root instanceof CheckboxTreeNode) {
+                        ((CheckboxTreeNode) root).checkAll(false);
+                    }
+                }
+                tree.repaint();
+            });
+
+            expandAllItem.addActionListener(e -> {
+                for (int i = 0; i < tree.getRowCount(); i++) {
+                    tree.expandRow(i);
+                }
+            });
+
+            collapseAllItem.addActionListener(e -> {
+                for (int i = tree.getRowCount() - 1; i >= 0; i--) {
+                    tree.collapseRow(i);
+                }
+            });
+
+            // Add level-specific items to submenu
+            levelOperationsMenu.add(checkOnlyFoldersThisLevelItem);
+            levelOperationsMenu.add(checkOnlyFilesThisLevelItem);
+            levelOperationsMenu.addSeparator();
+            levelOperationsMenu.add(checkAllThisLevelItem);
+
+            // Add menu items to popup menu
+            popupMenu.add(checkAllChildrenItem);
+            popupMenu.add(checkAllFoldersItem);
+            popupMenu.add(uncheckAllChildrenItem);
+            popupMenu.addSeparator();
+            popupMenu.add(checkWithoutChildrenItem);
+            popupMenu.addSeparator();
+            popupMenu.add(levelOperationsMenu);
+            popupMenu.addSeparator();
+            popupMenu.add(expandAllItem);
+            popupMenu.add(collapseAllItem);
+
+            // Add mouse listener to handle checkbox clicks and show context menu
             tree.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
@@ -385,6 +520,26 @@ public class TreeViewPanel {
                                 tree.repaint();
                             }
                         }
+                    }
+                }
+
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    maybeShowPopup(e);
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    maybeShowPopup(e);
+                }
+
+                private void maybeShowPopup(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        int row = tree.getRowForLocation(e.getX(), e.getY());
+                        if (row != -1) {
+                            tree.setSelectionRow(row);
+                        }
+                        popupMenu.show(e.getComponent(), e.getX(), e.getY());
                     }
                 }
             });

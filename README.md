@@ -1,7 +1,7 @@
 # JetTreeMark
 
 ![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ---
@@ -20,7 +20,10 @@ Perfect for sharing your project structure, documentation, code reviews, or just
 
 - 📂 Generate a clean tree view of any selected folder
 - 📋 One-click copy to clipboard
-- 🎨 Customize how the tree is displayed (coming soon)
+- 🎨 Flexible node control with context menu options:
+  - Check only folders or only files
+  - Check nodes without affecting their children
+  - Expand or collapse all nodes
 - ⚡ Ultra lightweight and seamless integration with the IDE
 
 ---
@@ -98,7 +101,21 @@ You can find it on the Visual Studio Code Marketplace [here](https://marketplace
 
    ![How to use the JetTreeMark plugin to exclude nodes from the tree view result](meta/screenshot-2.png "Screenshot - filter nodes from tree results -")
 
-5. Click the **"Copy Tree"** button at the bottom to copy the tree view to your clipboard. 🚀
+5. **Right-click** on the tree view to access the **context menu** with additional options:
+   - **Check Only Folders (All Levels)**: Select only directory nodes throughout the entire tree
+   - **Check Only Files (All Levels)**: Select only file nodes throughout the entire tree
+   - **Check All**: Select all nodes
+   - **Uncheck All**: Deselect all nodes
+   - **Check Without Children**: Select a node without affecting its children
+   - **Level Operations**: Submenu with level-specific operations:
+     - **Check Only Folders (This Level)**: Select only directory nodes at the current level
+     - **Check Only Files (This Level)**: Select only file nodes at the current level
+     - **Check All (This Level)**: Select all nodes at the current level
+     - **Uncheck All (This Level)**: Deselect all nodes at the current level
+   - **Expand All**: Expand all tree nodes
+   - **Collapse All**: Collapse all tree nodes
+
+6. Click the **"Copy Tree"** button at the bottom to copy the tree view to your clipboard. 🚀
 
 That's it! You can now paste your clean project structure anywhere you like.
 
