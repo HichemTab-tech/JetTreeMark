@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-05-03
+
+- Changelog update - `v1.0.0` by @github-actions in https://github.com/HichemTab-tech/JetTreeMark/pull/26
+- Enhance UI with context menu and upgrade configuration version by @HichemTab-tech in https://github.com/HichemTab-tech/JetTreeMark/pull/27
+- Respect .gitignore in TreeView for optimized file handling by @HichemTab-tech in https://github.com/HichemTab-tech/JetTreeMark/pull/28
+
 ## [1.0.0] - 2025-04-29
 
 - Changelog update - `v0.0.2` by @github-actions in https://github.com/HichemTab-tech/JetTreeMark/pull/22
@@ -39,7 +45,8 @@
 
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
 
-[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.2...v1.0.0
 [0.0.2]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/HichemTab-tech/JetTreeMark/commits/v0.0.1
