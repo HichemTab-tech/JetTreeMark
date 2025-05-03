@@ -21,9 +21,13 @@
     <change-notes><![CDATA[
       <h3>1.1.0</h3>
       <ul>
-        <li>Stable release</li>
-        <li>Fixes</li>
-        <li>Fix icon</li>
+        <li>Added context menu with advanced node operations:
+          <ul>
+            <li>Check All / Uncheck All - quickly select or deselect all nodes</li>
+            <li>Check Only Folders - select only directory nodes</li>
+            <li>Level-specific operations - apply actions only to the current level</li>
+          </ul>
+        </li>
       </ul>
     ]]></change-notes>
 
