@@ -8,7 +8,14 @@ import org.mockito.Mockito;
 import javax.swing.*;
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.*;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
+import java.util.Set;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
@@ -134,5 +141,209 @@ public class TreeViewPanelTest {
                 CheckboxTreeNode.CHECKED, folderNode.getCheckState());
         assertEquals("File node should be checked after checkOnlyFiles", 
                 CheckboxTreeNode.CHECKED, fileNode.getCheckState());
+    }
+
+    @Test
+    public void testShouldIgnoreFile() throws Exception {
+        // Get the TreeBuilderWorker class
+        Class<?> treeBuilderWorkerClass = Class.forName(
+                "com.github.hichemtabtech.jettreemark.toolwindow.TreeViewPanel$TreeBuilderWorker");
+
+        // Create a mock VirtualFile for the root folder
+        VirtualFile mockRootFolder = mock(VirtualFile.class);
+        when(mockRootFolder.getName()).thenReturn("root");
+        when(mockRootFolder.getPath()).thenReturn("/project");
+        when(mockRootFolder.getChildren()).thenReturn(new VirtualFile[0]);
+
+        // Create an instance of TreeBuilderWorker using its constructor
+        Constructor<?> constructor = treeBuilderWorkerClass.getDeclaredConstructor(
+                TreeViewPanel.class, VirtualFile.class);
+        constructor.setAccessible(true);
+        Object treeBuilderWorker = constructor.newInstance(treeViewPanel, mockRootFolder);
+
+        // Get the shouldIgnoreFile method
+        Method shouldIgnoreFileMethod = treeBuilderWorkerClass.getDeclaredMethod(
+                "shouldIgnoreFile", VirtualFile.class);
+        shouldIgnoreFileMethod.setAccessible(true);
+
+        // Set up gitignorePatterns field with test patterns
+        Field gitignorePatternsField = treeBuilderWorkerClass.getDeclaredField("gitignorePatterns");
+        gitignorePatternsField.setAccessible(true);
+
+        Set<String> testPatterns = new HashSet<>();
+        testPatterns.add("*.txt");         // Wildcard pattern
+        testPatterns.add("node_modules/"); // Directory pattern
+        testPatterns.add("config.json");   // Exact match
+        testPatterns.add("/logs");         // Path-specific pattern
+        gitignorePatternsField.set(treeBuilderWorker, testPatterns);
+
+        // Test cases
+        // 1. File that matches wildcard pattern
+        VirtualFile txtFile = mock(VirtualFile.class);
+        when(txtFile.getName()).thenReturn("test.txt");
+        when(txtFile.isDirectory()).thenReturn(false);
+        when(txtFile.getPath()).thenReturn("/project/test.txt");
+        boolean shouldIgnoreTxt = (boolean) shouldIgnoreFileMethod.invoke(treeBuilderWorker, txtFile);
+        assertTrue("File matching wildcard pattern should be ignored", shouldIgnoreTxt);
+
+        // 2. Directory that matches directory pattern
+        VirtualFile nodeModulesDir = mock(VirtualFile.class);
+        when(nodeModulesDir.getName()).thenReturn("node_modules");
+        when(nodeModulesDir.isDirectory()).thenReturn(true);
+        when(nodeModulesDir.getPath()).thenReturn("/project/node_modules");
+        boolean shouldIgnoreNodeModules = (boolean) shouldIgnoreFileMethod.invoke(treeBuilderWorker, nodeModulesDir);
+        assertTrue("Directory matching directory pattern should be ignored", shouldIgnoreNodeModules);
+
+        // 3. File that matches exact pattern
+        VirtualFile configFile = mock(VirtualFile.class);
+        when(configFile.getName()).thenReturn("config.json");
+        when(configFile.isDirectory()).thenReturn(false);
+        when(configFile.getPath()).thenReturn("/project/config.json");
+        boolean shouldIgnoreConfig = (boolean) shouldIgnoreFileMethod.invoke(treeBuilderWorker, configFile);
+        assertTrue("File matching exact pattern should be ignored", shouldIgnoreConfig);
+
+        // 4. File that matches path-specific pattern
+        VirtualFile logsFile = mock(VirtualFile.class);
+        when(logsFile.getName()).thenReturn("logs");
+        when(logsFile.isDirectory()).thenReturn(true);
+        when(logsFile.getPath()).thenReturn("/project/logs");
+        boolean shouldIgnoreLogs = (boolean) shouldIgnoreFileMethod.invoke(treeBuilderWorker, logsFile);
+        assertTrue("File matching path-specific pattern should be ignored", shouldIgnoreLogs);
+
+        // 5. File that doesn't match any pattern
+        VirtualFile regularFile = mock(VirtualFile.class);
+        when(regularFile.getName()).thenReturn("regular.java");
+        when(regularFile.isDirectory()).thenReturn(false);
+        when(regularFile.getPath()).thenReturn("/project/regular.java");
+        boolean shouldIgnoreRegular = (boolean) shouldIgnoreFileMethod.invoke(treeBuilderWorker, regularFile);
+        assertFalse("File not matching any pattern should not be ignored", shouldIgnoreRegular);
+    }
+
+    @Test
+    public void testFindGitIgnore() throws Exception {
+        // Get the TreeBuilderWorker class
+        Class<?> treeBuilderWorkerClass = Class.forName(
+                "com.github.hichemtabtech.jettreemark.toolwindow.TreeViewPanel$TreeBuilderWorker");
+
+        // Create a mock VirtualFile for the root folder
+        VirtualFile mockRootFolder = mock(VirtualFile.class);
+        when(mockRootFolder.getName()).thenReturn("root");
+        when(mockRootFolder.getPath()).thenReturn("/project");
+        when(mockRootFolder.getChildren()).thenReturn(new VirtualFile[0]);
+
+        // Create an instance of TreeBuilderWorker using its constructor
+        Constructor<?> constructor = treeBuilderWorkerClass.getDeclaredConstructor(
+                TreeViewPanel.class, VirtualFile.class);
+        constructor.setAccessible(true);
+        Object treeBuilderWorker = constructor.newInstance(treeViewPanel, mockRootFolder);
+
+        // Use reflection to access the private method
+        Method findGitIgnoreMethod = treeBuilderWorkerClass.getDeclaredMethod(
+                "findGitIgnore", VirtualFile.class, Set.class);
+        findGitIgnoreMethod.setAccessible(true);
+
+        // Create a mock VirtualFile for .gitignore
+        VirtualFile mockGitignoreFile = mock(VirtualFile.class);
+        when(mockGitignoreFile.isDirectory()).thenReturn(false);
+        when(mockGitignoreFile.exists()).thenReturn(true);
+
+        // Create gitignore content with various pattern types
+        String gitignoreContent = 
+                "# Comment line\n" +
+                "*.txt\n" +
+                "node_modules/\n" +
+                "config.json\n" +
+                "/logs\n" +
+                "  # Comment with leading spaces\n" +
+                "  \n" + // Empty line with spaces
+                "dist/";
+
+        InputStream gitignoreStream = new ByteArrayInputStream(
+                gitignoreContent.getBytes(StandardCharsets.UTF_8));
+        when(mockGitignoreFile.getInputStream()).thenReturn(gitignoreStream);
+
+        // Create a mock folder that contains the .gitignore file
+        VirtualFile mockFolder = mock(VirtualFile.class);
+        when(mockFolder.findChild(".gitignore")).thenReturn(mockGitignoreFile);
+
+        // Create a set to hold the patterns
+        Set<String> patterns = new HashSet<>();
+
+        // Call the method
+        findGitIgnoreMethod.invoke(treeBuilderWorker, mockFolder, patterns);
+
+        // Verify the patterns were correctly loaded
+        assertEquals("Should have 5 patterns", 5, patterns.size());
+        assertTrue("Should contain *.txt pattern", patterns.contains("*.txt"));
+        assertTrue("Should contain node_modules/ pattern", patterns.contains("node_modules/"));
+        assertTrue("Should contain config.json pattern", patterns.contains("config.json"));
+        assertTrue("Should contain /logs pattern", patterns.contains("/logs"));
+        assertTrue("Should contain dist/ pattern", patterns.contains("dist/"));
+
+        // Verify comments and empty lines were skipped
+        assertFalse("Should not contain comment lines", patterns.contains("# Comment line"));
+        assertFalse("Should not contain comment with leading spaces", 
+                patterns.contains("  # Comment with leading spaces"));
+        assertFalse("Should not contain empty lines", patterns.contains(""));
+        assertFalse("Should not contain empty lines with spaces", patterns.contains("  "));
+    }
+
+    @Test
+    public void testLoadGitignorePatternsForFolder() throws Exception {
+        // Get the TreeBuilderWorker class
+        Class<?> treeBuilderWorkerClass = Class.forName(
+                "com.github.hichemtabtech.jettreemark.toolwindow.TreeViewPanel$TreeBuilderWorker");
+
+        // Create a mock VirtualFile for the root folder
+        VirtualFile mockRootFolder = mock(VirtualFile.class);
+        when(mockRootFolder.getName()).thenReturn("root");
+        when(mockRootFolder.getPath()).thenReturn("/project");
+        when(mockRootFolder.getChildren()).thenReturn(new VirtualFile[0]);
+
+        // Create an instance of TreeBuilderWorker using its constructor
+        Constructor<?> constructor = treeBuilderWorkerClass.getDeclaredConstructor(
+                TreeViewPanel.class, VirtualFile.class);
+        constructor.setAccessible(true);
+        Object treeBuilderWorker = constructor.newInstance(treeViewPanel, mockRootFolder);
+
+        // Use reflection to access the private method
+        Method loadPatternsMethod = treeBuilderWorkerClass.getDeclaredMethod(
+                "loadGitignorePatternsForFolder", VirtualFile.class);
+        loadPatternsMethod.setAccessible(true);
+
+        // Create a mock VirtualFile for .gitignore
+        VirtualFile mockGitignoreFile = mock(VirtualFile.class);
+        when(mockGitignoreFile.isDirectory()).thenReturn(false);
+        when(mockGitignoreFile.exists()).thenReturn(true);
+
+        // Create gitignore content
+        String gitignoreContent = "*.txt\nnode_modules/\nconfig.json";
+        InputStream gitignoreStream = new ByteArrayInputStream(
+                gitignoreContent.getBytes(StandardCharsets.UTF_8));
+        when(mockGitignoreFile.getInputStream()).thenReturn(gitignoreStream);
+
+        // Create a mock folder that contains the .gitignore file
+        VirtualFile mockFolder = mock(VirtualFile.class);
+        when(mockFolder.findChild(".gitignore")).thenReturn(mockGitignoreFile);
+
+        // Call the method
+        @SuppressWarnings("unchecked")
+        Set<String> patterns = (Set<String>) loadPatternsMethod.invoke(treeBuilderWorker, mockFolder);
+
+        // Verify the patterns were correctly loaded
+        assertEquals("Should have 3 patterns", 3, patterns.size());
+        assertTrue("Should contain *.txt pattern", patterns.contains("*.txt"));
+        assertTrue("Should contain node_modules/ pattern", patterns.contains("node_modules/"));
+        assertTrue("Should contain config.json pattern", patterns.contains("config.json"));
+
+        // Test with a folder that doesn't have a .gitignore file
+        VirtualFile mockFolderNoGitignore = mock(VirtualFile.class);
+        when(mockFolderNoGitignore.findChild(".gitignore")).thenReturn(null);
+
+        @SuppressWarnings("unchecked")
+        Set<String> emptyPatterns = (Set<String>) loadPatternsMethod.invoke(treeBuilderWorker, mockFolderNoGitignore);
+
+        // Verify an empty set is returned
+        assertTrue("Should return an empty set when no .gitignore file exists", emptyPatterns.isEmpty());
     }
 }
