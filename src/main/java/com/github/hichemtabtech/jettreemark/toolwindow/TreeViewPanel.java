@@ -477,23 +477,6 @@ public class TreeViewPanel {
                 }
             });
 
-            /*tree.addTreeSelectionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                CheckboxTreeNode node;
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node_) {
-                    node = node_;
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        node = (CheckboxTreeNode) root;
-                    }
-                }
-                if (node == null) {
-                    targetJMenuItem.setEnabled(false); // Disable when nothing is selected
-                    return;
-                }
-            });*/
-
             // Add level-specific items to submenu
             levelOperationsMenu.add(checkOnlyFoldersThisLevelItem);
             levelOperationsMenu.add(checkOnlyFilesThisLevelItem);
