@@ -20,8 +20,14 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.net.URI;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import javax.swing.SwingWorker;
@@ -275,10 +281,99 @@ public class TreeViewPanel {
         private final VirtualFile rootFolder;
         private final String rootName;
         private int tabIndex;
+        private Set<String> gitignorePatterns;
 
         public TreeBuilderWorker(VirtualFile rootFolder) {
             this.rootFolder = rootFolder;
             this.rootName = rootFolder.getName();
+            this.gitignorePatterns = new HashSet<>();
+            loadGitignorePatterns(rootFolder);
+        }
+
+        /**
+         * Loads patterns from .gitignore file if it exists
+         * 
+         * @param rootFolder the root folder to search for .gitignore
+         */
+        private void loadGitignorePatterns(VirtualFile rootFolder) {
+            gitignorePatterns = new HashSet<>();
+            findGitIgnore(rootFolder, gitignorePatterns);
+        }
+
+        /**
+         * Loads patterns from .gitignore file if it exists and returns them
+         * 
+         * @param folder the folder to search for .gitignore
+         * @return the set of gitignore patterns
+         */
+        private Set<String> loadGitignorePatternsForFolder(VirtualFile folder) {
+            Set<String> patterns = new HashSet<>();
+            findGitIgnore(folder, patterns);
+            return patterns;
+        }
+
+        private void findGitIgnore(VirtualFile folder, Set<String> patterns) {
+            VirtualFile gitignoreFile = folder.findChild(".gitignore");
+            if (gitignoreFile != null && !gitignoreFile.isDirectory() && gitignoreFile.exists()) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(gitignoreFile.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        // Skip empty lines and comments
+                        line = line.trim();
+                        if (!line.isEmpty() && !line.startsWith("#")) {
+                            patterns.add(line);
+                        }
+                    }
+                } catch (IOException e) {
+                    logger.warning("Failed to read .gitignore file: " + e.getMessage());
+                }
+            }
+        }
+
+        /**
+         * Checks if a file should be ignored based on gitignore patterns
+         * 
+         * @param file the file to check
+         * @return true if the file should be ignored, false otherwise
+         */
+        private boolean shouldIgnoreFile(VirtualFile file) {
+            if (gitignorePatterns.isEmpty()) {
+                return false;
+            }
+
+            String filePath = file.getName();
+
+            // Check if the file name or path matches any pattern
+            for (String pattern : gitignorePatterns) {
+                // Simple exact match
+                if (pattern.equals(filePath)) {
+                    return true;
+                }
+
+                // Directory match (pattern ends with /)
+                if (pattern.endsWith("/") && file.isDirectory() && 
+                    pattern.substring(0, pattern.length() - 1).equals(filePath)) {
+                    return true;
+                }
+
+                // Wildcard match (pattern contains *)
+                if (pattern.contains("*")) {
+                    String regex = pattern.replace(".", "\\.").replace("*", ".*");
+                    if (filePath.matches(regex)) {
+                        return true;
+                    }
+                }
+
+                if (pattern.startsWith("/") || pattern.startsWith("./")) {
+                    String relativePath = file.getPath().substring(rootFolder.getPath().length());
+                    if (relativePath.startsWith(pattern)) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         @Override
@@ -321,6 +416,78 @@ public class TreeViewPanel {
                         stack.add(new Object[]{childNode, child});
                     }
                 }
+            }
+
+            // After tree construction is complete, unselect gitignore files
+            unselectGitignoreFiles(parentNode, parentFile);
+        }
+
+        /**
+         * Unselects nodes that match gitignore patterns at the current level
+         * For folders that match gitignore patterns, uncheck them with propagation to children
+         * Only traverse into folders that don't match gitignore patterns
+         * <p>
+         * Non-recursive version to avoid calling VirtualFile.getChildren() from a recursive method
+         * 
+         * @param parentNode the parent node in the tree
+         * @param parentFile the parent file in the file system
+         */
+        private void unselectGitignoreFiles(DefaultMutableTreeNode parentNode, VirtualFile parentFile) {
+            if (!(parentNode instanceof CheckboxTreeNode)) {
+                return;
+            }
+
+            // Use a stack to avoid recursion
+            List<Object[]> stack = new ArrayList<>();
+
+            // Each stack entry contains: [node, file, patterns]
+            stack.add(new Object[]{parentNode, parentFile, new HashSet<>(gitignorePatterns)});
+
+            while (!stack.isEmpty()) {
+                Object[] current = stack.removeLast();
+                DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode) current[0];
+                VirtualFile currentFile = (VirtualFile) current[1];
+                @SuppressWarnings("unchecked")
+                Set<String> currentPatterns = (Set<String>) current[2];
+
+                // Temporarily set the patterns for this level
+                Set<String> originalPatterns = gitignorePatterns;
+                gitignorePatterns = currentPatterns;
+
+                logger.info(gitignorePatterns.toString());
+
+                if (currentNode instanceof CheckboxTreeNode) {
+                    VirtualFile[] children = currentFile.getChildren();
+                    for (int i = 0; i < Math.min(children.length, currentNode.getChildCount()); i++) {
+                        VirtualFile childFile = children[i];
+                        DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) currentNode.getChildAt(i);
+
+                        if (childNode instanceof CheckboxTreeNode) {
+                            if (shouldIgnoreFile(childFile)) {
+                                // If it's a folder that matches gitignore pattern,
+                                // uncheck it with propagation to children
+                                // If it's a file that matches gitignore pattern,
+                                // just uncheck it
+                                ((CheckboxTreeNode) childNode).setCheckState(CheckboxTreeNode.UNCHECKED, childFile.isDirectory(), false);
+                            } else if (childFile.isDirectory() && childNode.getChildCount() > 0) {
+                                // Only traverse into folders that don't match gitignore patterns
+                                // Check if the folder has a .gitignore file
+                                // and load its patterns
+                                Set<String> folderPatterns = loadGitignorePatternsForFolder(childFile);
+
+                                // Combine the current patterns with the folder's patterns
+                                Set<String> combinedPatterns = new HashSet<>(currentPatterns);
+                                combinedPatterns.addAll(folderPatterns);
+
+                                // Add this child to the stack with its combined patterns
+                                stack.add(new Object[]{childNode, childFile, combinedPatterns});
+                            }
+                        }
+                    }
+                }
+
+                // Restore the original patterns
+                gitignorePatterns = originalPatterns;
             }
         }
 

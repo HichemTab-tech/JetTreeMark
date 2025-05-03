@@ -28,6 +28,9 @@
             <li>Level-specific operations - apply actions only to the current level</li>
           </ul>
         </li>
+        <li>
+            Improved performance by unchecking files/folders mentioned in .gitignore by default in the TreeView.
+        </li>
       </ul>
     ]]></change-notes>
 
