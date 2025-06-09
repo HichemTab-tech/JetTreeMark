@@ -3,33 +3,26 @@
     <id>com.github.hichemtabtech.jettreemark</id>
     <name>JetTreeMark</name>
     <vendor email="hichem.tab2002@gmail.com" url="https://github.com/HichemTab-tech">HichemTab-tech</vendor>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
 
     <description><![CDATA[
-      JetTreeMark is a plugin for IntelliJ IDEA that generates a copiable tree view representation of your project's folder structure.
-      When you select a folder in the project tool window, JetTreeMark displays a formatted tree view that you can easily copy and share with others.
+JetTreeMark is a plugin for IntelliJ IDEA that enhances project collaboration by generating a clean,
+copiable tree view of your folder structure.
+The intuitive features save time and improve your workflow.
 
-      <h3>Features:</h3>
-      <ul>
-        <li>Display a tree view of folders and files when selecting a folder in the project tool window</li>
-        <li>Copy the tree view to clipboard</li>
-        <li>Customize the tree view display with checkboxes to include/exclude files and folders</li>
-        <li>Multiple tabs support for comparing different folder structures</li>
-      </ul>
-    ]]></description>
+<h3>Key Features</h3>
+<ul>
+  <li>Automatically generate folder and file hierarchy views</li>
+  <li>Copy the generated tree view to your clipboard</li>
+  <li>Customize inclusions and exclusions for files/folders in the view</li>
+  <li>Support for multiple tabs to compare folder structures</li>
+</ul>
+]]></description>
 
     <change-notes><![CDATA[
-      <h3>1.1.0</h3>
+      <h3>1.1.1</h3>
       <ul>
-        <li>Added context menu with advanced node operations:
-          <ul>
-            <li>Check All / Uncheck All - quickly select or deselect all nodes</li>
-            <li>Check Only Folders - select only directory nodes</li>
-            <li>Level-specific operations - apply actions only to the current level</li>
-          </ul>
-        </li>
-        <li>
-            Improved performance by unchecking files/folders mentioned in .gitignore by default in the TreeView.
+        <li>Compatibility fixes
         </li>
       </ul>
     ]]></change-notes>
