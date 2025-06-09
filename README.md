@@ -1,7 +1,7 @@
 # JetTreeMark
 
 ![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ---
