@@ -1,3 +1,4 @@
+import org.gradle.kotlin.dsl.register
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
