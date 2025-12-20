@@ -399,10 +399,7 @@ public class TreeViewPanel {
                 VirtualFile currentFile = (VirtualFile) current[1];
 
                 VirtualFile[] children = currentFile.getChildren();
-                Arrays.sort(children, Comparator
-                        .comparing(VirtualFile::isDirectory)
-                        .reversed()
-                        .thenComparing(vf -> vf.getName().toLowerCase()));
+                sortChildren(children);
                 for (VirtualFile child : children) {
                     // Create a CheckboxTreeNode if the parent is a CheckboxTreeNode,
                     // otherwise use DefaultMutableTreeNode
@@ -423,6 +420,13 @@ public class TreeViewPanel {
 
             // After tree construction is complete, unselect gitignore files
             unselectGitignoreFiles(parentNode, parentFile);
+        }
+
+        private void sortChildren(VirtualFile[] children) {
+            Arrays.sort(children, Comparator
+                    .comparing(VirtualFile::isDirectory)
+                    .reversed()
+                    .thenComparing(vf -> vf.getName().toLowerCase()));
         }
 
         /**
@@ -461,6 +465,7 @@ public class TreeViewPanel {
 
                 if (currentNode instanceof CheckboxTreeNode) {
                     VirtualFile[] children = currentFile.getChildren();
+                    sortChildren(children);
                     for (int i = 0; i < Math.min(children.length, currentNode.getChildCount()); i++) {
                         VirtualFile childFile = children[i];
                         DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) currentNode.getChildAt(i);
