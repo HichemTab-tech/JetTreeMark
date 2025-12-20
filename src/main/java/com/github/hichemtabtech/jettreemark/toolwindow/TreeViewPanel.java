@@ -40,6 +40,7 @@ public class TreeViewPanel {
     private static final String GITHUB_URL = "https://github.com/HichemTab-tech";
     private static final String MESSAGE = JetTreeMarkBundle.message("welcome_to_jet_tree_mark");
     private static final String GITHUB_LINK_TEXT = "Visit HichemTab-tech on GitHub";
+    private static final String[] IGNORED_FILES_BY_DEFAULT = new String[]{".git", ".idea"};
 
     private final JBTabbedPane tabbedPane;
     private int tabCounter = 1;
@@ -337,11 +338,14 @@ public class TreeViewPanel {
          * @return true if the file should be ignored, false otherwise
          */
         private boolean shouldIgnoreFile(VirtualFile file) {
+            String filePath = file.getName();
+
+            if (Arrays.asList(IGNORED_FILES_BY_DEFAULT).contains(filePath)) {
+                return true;
+            }
             if (gitignorePatterns.isEmpty()) {
                 return false;
             }
-
-            String filePath = file.getName();
 
             // Check if the file name or path matches any pattern
             for (String pattern : gitignorePatterns) {
