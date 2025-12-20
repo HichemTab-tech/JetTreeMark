@@ -11,6 +11,7 @@ import com.intellij.ui.treeStructure.Tree;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
@@ -24,10 +25,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.*;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 import javax.swing.SwingWorker;
@@ -400,6 +399,10 @@ public class TreeViewPanel {
                 VirtualFile currentFile = (VirtualFile) current[1];
 
                 VirtualFile[] children = currentFile.getChildren();
+                Arrays.sort(children, Comparator
+                        .comparing(VirtualFile::isDirectory)
+                        .reversed()
+                        .thenComparing(vf -> vf.getName().toLowerCase()));
                 for (VirtualFile child : children) {
                     // Create a CheckboxTreeNode if the parent is a CheckboxTreeNode,
                     // otherwise use DefaultMutableTreeNode
