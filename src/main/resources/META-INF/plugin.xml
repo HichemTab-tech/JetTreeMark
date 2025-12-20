@@ -2,8 +2,8 @@
 <idea-plugin>
     <id>com.github.hichemtabtech.jettreemark</id>
     <name>JetTreeMark</name>
-    <vendor email="hichem.tab2002@gmail.com" url="https://github.com/HichemTab-tech">HichemTab-tech</vendor>
-    <version>1.1.1</version>
+    <vendor email="hichem.taboukouyout@hichemtab-tech.me" url="https://hichemtab-tech.me">HichemTab-tech</vendor>
+    <version>1.1.2</version>
 
     <description><![CDATA[
 JetTreeMark is a plugin for IntelliJ IDEA that enhances project collaboration by generating a clean,
@@ -20,9 +20,11 @@ The intuitive features save time and improve your workflow.
 ]]></description>
 
     <change-notes><![CDATA[
-      <h3>1.1.1</h3>
+      <h3>1.1.2</h3>
       <ul>
         <li>Compatibility fixes
+        </li>
+        <li>Sort folders and files alphabetically to match project view
         </li>
       </ul>
     ]]></change-notes>
