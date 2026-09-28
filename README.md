@@ -7,7 +7,9 @@
 ---
 
 <!-- Plugin description -->
-## 🚀 What is JetTreeMark?
+JetTreeMark generates clean, copyable folder trees in JetBrains IDEs for easy sharing.
+
+## What is JetTreeMark? 🚀
 
 **JetTreeMark** is an IntelliJ IDEA plugin that lets
 you instantly generate and copy a **beautiful tree view** of any folder you select inside your project.  
