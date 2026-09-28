@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-28
+
 ### Changed
 
 - Make large tree loading, selection, copying, and tab cleanup cancellable and memory-safe.
@@ -55,7 +57,8 @@
 
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
 
-[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.2...v1.0.0
 [0.0.2]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.1...v0.0.2
