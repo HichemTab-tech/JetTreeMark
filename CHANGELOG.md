@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Make large tree loading, selection, copying, and tab cleanup cancellable and memory-safe.
+- Use the IDE's VCS ignore status for version-controlled files, with ordered `.gitignore` matching as a fallback,
+  and load ignored directory contents on demand.
+
+### Added
+
+- Add streamed **Save Tree…** output for trees that exceed the clipboard safety limit.
+
 ## [1.1.0] - 2025-05-03
 
 - Changelog update - `v1.0.0` by @github-actions in https://github.com/HichemTab-tech/JetTreeMark/pull/26
@@ -45,7 +55,7 @@
 
 - Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
 
-[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.1.1...HEAD
 [1.1.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.2...v1.0.0
 [0.0.2]: https://github.com/HichemTab-tech/JetTreeMark/compare/v0.0.1...v0.0.2

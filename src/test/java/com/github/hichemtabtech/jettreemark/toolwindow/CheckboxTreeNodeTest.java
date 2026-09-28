@@ -52,7 +52,7 @@ public class CheckboxTreeNodeTest {
         // Test setting check state with propagation to parent
         fileNode1.setCheckState(CheckboxTreeNode.CHECKED, false, true);
         assertEquals("File node 1 should be checked", CheckboxTreeNode.CHECKED, fileNode1.getCheckState());
-        assertEquals("Folder node should be checked", CheckboxTreeNode.CHECKED, folderNode.getCheckState());
+        assertEquals("Folder node should be indeterminate", CheckboxTreeNode.INDETERMINATE, folderNode.getCheckState());
     }
 
     @Test
@@ -123,13 +123,28 @@ public class CheckboxTreeNodeTest {
         // Check one file node
         fileNode1.setCheckState(CheckboxTreeNode.CHECKED, false, true);
         assertEquals("File node 1 should be checked", CheckboxTreeNode.CHECKED, fileNode1.getCheckState());
-        assertEquals("Folder node should be checked", CheckboxTreeNode.CHECKED, folderNode.getCheckState());
-        assertEquals("Root node should be checked", CheckboxTreeNode.CHECKED, rootNode.getCheckState());
+        assertEquals("Folder node should be indeterminate", CheckboxTreeNode.INDETERMINATE, folderNode.getCheckState());
+        assertEquals("Root node should be indeterminate", CheckboxTreeNode.INDETERMINATE, rootNode.getCheckState());
         
         // Uncheck the file node
         fileNode1.setCheckState(CheckboxTreeNode.UNCHECKED, false, true);
         assertEquals("File node 1 should be unchecked", CheckboxTreeNode.UNCHECKED, fileNode1.getCheckState());
-        assertEquals("Folder node should still be checked", CheckboxTreeNode.CHECKED, folderNode.getCheckState());
+        assertEquals("Folder node should be unchecked", CheckboxTreeNode.UNCHECKED, folderNode.getCheckState());
+        assertEquals("Root node should be unchecked", CheckboxTreeNode.UNCHECKED, rootNode.getCheckState());
+    }
+
+    @Test
+    public void testDeepPropagationDoesNotUseCallStack() {
+        CheckboxTreeNode current = rootNode;
+        for (int i = 0; i < 50_000; i++) {
+            CheckboxTreeNode child = new CheckboxTreeNode("folder-" + i, true);
+            current.add(child);
+            current = child;
+        }
+
+        rootNode.setCheckState(CheckboxTreeNode.UNCHECKED, true, false);
+
+        assertEquals(CheckboxTreeNode.UNCHECKED, current.getCheckState());
     }
 
     @Test(expected = IllegalArgumentException.class)

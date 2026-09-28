@@ -13,6 +13,8 @@ Learn how to generate and copy a tree view of your project structure in just a f
 
 - A **Tool Window** will open showing the tree structure.
 - You can browse the structure and **select/deselect** files or folders you want to exclude.
+- VCS-ignored entries remain unchecked initially. Expand or directly check an ignored directory to load its
+  contents on demand.
 
   ![How to use the JetTreeMark plugin to exclude nodes from the tree view result](../../meta/screenshot-2.png "Screenshot - filter nodes from tree results -")
 
@@ -20,5 +22,7 @@ Learn how to generate and copy a tree view of your project structure in just a f
 
 - Once satisfied, click on the **"Copy Tree"** button at the bottom.
 - The full tree will be copied to your clipboard!
+- For very large trees, click **"Save Tree…"** to stream the output to a UTF-8 text file without
+  placing the whole result on the clipboard.
 
 You can now paste it wherever you need — in documents, GitHub issues, code reviews, or chats. 🚀

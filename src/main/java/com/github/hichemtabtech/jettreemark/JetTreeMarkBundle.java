@@ -14,7 +14,7 @@ public final class JetTreeMarkBundle extends DynamicBundle {
     private static final JetTreeMarkBundle INSTANCE = new JetTreeMarkBundle();
 
     private JetTreeMarkBundle() {
-        super(BUNDLE);
+        super(JetTreeMarkBundle.class, BUNDLE);
     }
 
     /**

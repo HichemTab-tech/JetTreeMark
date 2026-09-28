@@ -20,7 +20,9 @@ public class CheckboxTreeCellRenderer extends DefaultTreeCellRenderer {
         Component renderer = super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus);
 
         if (value instanceof CheckboxTreeNode node) {
-            checkBox.setText(node.getUserObject().toString() + (node.getChildCount() > 0 ? "/" : ""));
+            // Ignored and empty directories intentionally have no materialized children.
+            // Use filesystem metadata instead of child count so they still look like folders.
+            checkBox.setText(node.getUserObject().toString() + (node.isFolder() ? "/" : ""));
 
             // Set the appropriate state
             switch (node.getCheckState()) {

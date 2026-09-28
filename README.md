@@ -1,13 +1,15 @@
 # JetTreeMark
 
 ![Build](https://github.com/HichemTab-tech/JetTreeMark/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/HichemTab-tech/JetTreeMark/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/HichemTab-tech/JetTreeMark/blob/main/LICENSE)
 
 ---
 
 <!-- Plugin description -->
-## 🚀 What is JetTreeMark?
+JetTreeMark generates clean, copyable folder trees in JetBrains IDEs for easy sharing.
+
+## What is JetTreeMark? 🚀
 
 **JetTreeMark** is an IntelliJ IDEA plugin that lets
 you instantly generate and copy a **beautiful tree view** of any folder you select inside your project.  
@@ -20,6 +22,7 @@ Perfect for sharing your project structure, documentation, code reviews, or just
 
 - 📂 Generate a clean tree view of any selected folder
 - 📋 One-click copy to clipboard
+- 💾 Stream very large trees directly to a UTF-8 text file
 - 🎨 Flexible node control with context menu options:
   - Check only folders or only files
   - Check nodes without affecting their children
@@ -98,6 +101,8 @@ You can find it on the Visual Studio Code Marketplace [here](https://marketplace
 
 3. A **JetTreeMark Tool Window** will open, showing the folder structure.
 4. **Optionally**, select which files or folders you want to **exclude** from the final tree.
+   VCS-ignored entries start unchecked. Ignored directories load their contents only when you expand or directly
+   check them.
 
    ![How to use the JetTreeMark plugin to exclude nodes from the tree view result](meta/screenshot-2.png "Screenshot - filter nodes from tree results -")
 
@@ -115,7 +120,8 @@ You can find it on the Visual Studio Code Marketplace [here](https://marketplace
    - **Expand All**: Expand all tree nodes
    - **Collapse All**: Collapse all tree nodes
 
-6. Click the **"Copy Tree"** button at the bottom to copy the tree view to your clipboard. 🚀
+6. Click **"Copy Tree"** to copy the tree view to your clipboard. For a tree that exceeds the
+   clipboard safety limit, use **"Save Tree…"** to stream it to a UTF-8 text file instead. 🚀
 
 That's it! You can now paste your clean project structure anywhere you like.
 

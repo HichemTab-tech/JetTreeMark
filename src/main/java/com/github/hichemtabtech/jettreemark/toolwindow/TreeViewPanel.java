@@ -1,6 +1,8 @@
 package com.github.hichemtabtech.jettreemark.toolwindow;
 
 import com.github.hichemtabtech.jettreemark.JetTreeMarkBundle;
+import com.intellij.openapi.Disposable;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
@@ -9,733 +11,822 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTabbedPane;
 import com.intellij.ui.treeStructure.Tree;
 import org.jetbrains.annotations.NotNull;
+import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
-import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.BufferedWriter;
 import java.net.URI;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.SwingWorker;
 
-import static java.util.logging.Logger.getLogger;
-
-/**
- * Panel that displays project information and tree views.
- */
-public class TreeViewPanel {
+/** Panel that displays project information and generated tree views. */
+public class TreeViewPanel implements Disposable {
     private static final String GITHUB_URL = "https://github.com/HichemTab-tech";
-    private static final String MESSAGE = JetTreeMarkBundle.message("welcome_to_jet_tree_mark");
-    private static final String GITHUB_LINK_TEXT = "Visit HichemTab-tech on GitHub";
+    private static final int DEFAULT_CLIPBOARD_LIMIT = 5_000_000;
+    private static final int DEFAULT_EXPAND_LIMIT = 20_000;
+    private static final int UI_BATCH_SIZE = 1_000;
+    private static final Logger LOGGER = Logger.getLogger(TreeViewPanel.class.getName());
 
-    private final JBTabbedPane tabbedPane;
-    private int tabCounter = 1;
-    private static final Logger logger = getLogger(TreeViewPanel.class.getName());
+    private final JBTabbedPane tabbedPane = new JBTabbedPane();
+    private final JPanel content = new JPanel(new BorderLayout());
+    private final Set<SwingWorker<?, ?>> activeWorkers =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Set<TabSession> sessions =
+            Collections.newSetFromMap(new IdentityHashMap<>());
+    private final VcsIgnoreProvider vcsIgnoreProvider;
+    private int nextTabNumber = 1;
+    private boolean disposed;
 
     public TreeViewPanel() {
-        tabbedPane = new JBTabbedPane();
-        JPanel welcomePanel = createWelcomePanel();
-        tabbedPane.addTab(JetTreeMarkBundle.message("welcome"), welcomePanel);
-        // Welcome tab is not closable
+        this(VcsIgnoreProvider.NONE);
+    }
+
+    public TreeViewPanel(@NotNull Project project) {
+        this(VcsIgnoreProvider.forProject(project));
+    }
+
+    TreeViewPanel(@NotNull VcsIgnoreProvider vcsIgnoreProvider) {
+        this.vcsIgnoreProvider = vcsIgnoreProvider;
+        content.add(tabbedPane, BorderLayout.CENTER);
+        tabbedPane.addTab(JetTreeMarkBundle.message("welcome"), createWelcomePanel());
     }
 
     public JPanel getContent() {
-        JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.add(tabbedPane, BorderLayout.CENTER);
-        return mainPanel;
+        return content;
     }
 
-    /**
-     * Creates the welcome panel with GitHub link.
-     *
-     * @return the welcome panel
-     */
-    private JPanel createWelcomePanel() {
-        JBPanel<JBPanel<?>> panel = new JBPanel<>();
-        panel.setLayout(new BorderLayout());
+    public void addFolderToTreeView(@NotNull VirtualFile folder) {
+        if (!SwingUtilities.isEventDispatchThread()) {
+            SwingUtilities.invokeLater(() -> addFolderToTreeView(folder));
+            return;
+        }
+        if (disposed) {
+            return;
+        }
 
-        // Welcome message
-        JBLabel welcomeLabel = new JBLabel(MESSAGE);
+        TabSession session = new TabSession(folder.getName(), nextTabNumber++);
+        sessions.add(session);
+        TreeBuilderWorker worker = new TreeBuilderWorker(session, folder);
+        session.showLoadingPanel();
+        startWorker(session, worker);
+    }
+
+    @Override
+    public void dispose() {
+        disposed = true;
+        for (SwingWorker<?, ?> worker : Set.copyOf(activeWorkers)) {
+            worker.cancel(true);
+        }
+        for (TabSession session : Set.copyOf(sessions)) {
+            session.stopTimers();
+        }
+        activeWorkers.clear();
+        sessions.clear();
+    }
+
+    private @NotNull JPanel createWelcomePanel() {
+        JBPanel<JBPanel<?>> panel = new JBPanel<>(new BorderLayout());
+        JBLabel welcomeLabel = new JBLabel(JetTreeMarkBundle.message("welcome_to_jet_tree_mark"));
         welcomeLabel.setFont(new Font(welcomeLabel.getFont().getName(), Font.BOLD, 16));
         welcomeLabel.setHorizontalAlignment(SwingConstants.CENTER);
         panel.add(welcomeLabel, BorderLayout.NORTH);
 
-        // GitHub link
-        JBLabel githubLink = createGitHubLinkLabel();
-
+        JBLabel githubLink = createGithubLink();
         panel.add(githubLink, BorderLayout.CENTER);
-
-        // Add some padding
         panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-
         return panel;
     }
 
-    private static @NotNull JBLabel createGitHubLinkLabel() {
-        JBLabel githubLink = new JBLabel("<html><a href='" + GITHUB_URL + "'>" + GITHUB_LINK_TEXT + "</a></html>");
+    private static @NonNull JBLabel createGithubLink() {
+        JBLabel githubLink = new JBLabel("<html><a href='" + GITHUB_URL + "'>Visit HichemTab-tech on GitHub</a></html>");
         githubLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
         githubLink.setHorizontalAlignment(SwingConstants.CENTER);
-
-        // Add click listener to open browser
         githubLink.addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseClicked(MouseEvent e) {
+            public void mouseClicked(MouseEvent event) {
                 try {
                     Desktop.getDesktop().browse(new URI(GITHUB_URL));
-                } catch (Exception ex) {
-                    logger.severe("Failed to open GitHub link: " + ex.getMessage());
+                } catch (Exception exception) {
+                    LOGGER.log(Level.WARNING, "Failed to open GitHub link", exception);
                 }
             }
         });
         return githubLink;
     }
 
-    /**
-     * Adds a folder to the tree view.
-     *
-     * @param folder the folder to add
-     */
-    public void addFolderToTreeView(@NotNull VirtualFile folder) {
-        // Increment tab counter
-        tabCounter++;
-
-        // Create and start the tree builder worker
-        TreeBuilderWorker worker = new TreeBuilderWorker(folder);
-
-        // Show loading panel first
-        worker.showLoadingPanel();
-
-        // Execute the worker to start building the tree in the background
-        worker.execute();
-    }
-
-    private @NotNull JPanel createTreeViewPanel(Tree tree, CheckboxTreeNode rootNode) {
+    private @NotNull JPanel createTreeViewPanel(
+            TabSession session,
+            Tree tree,
+            CheckboxTreeNode rootNode
+    ) {
         JPanel treePanel = new JPanel(new BorderLayout());
+        treePanel.add(new JBScrollPane(tree), BorderLayout.CENTER);
 
-        // Create a scroll pane for the tree
-        JBScrollPane scrollPane = new JBScrollPane(tree);
-        treePanel.add(scrollPane, BorderLayout.CENTER);
-
-        // Create a panel for the copy button
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton saveButton = new JButton(JetTreeMarkBundle.message("save_tree"));
         JButton copyButton = new JButton(JetTreeMarkBundle.message("copy_tree"));
-        copyButton.addActionListener(e -> {
-            // Generate text representation of the tree with only checked nodes
-            String treeText = generateTreeText(rootNode, "", true);
-
-            // Copy the tree text to clipboard
-            StringSelection stringSelection = new StringSelection(treeText);
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            clipboard.setContents(stringSelection, null);
-
-            // Provide visual feedback
-            copyButton.setText(JetTreeMarkBundle.message("copied"));
-            Timer timer = new Timer(1500, event -> copyButton.setText(JetTreeMarkBundle.message("copy_tree")));
-            timer.setRepeats(false);
-            timer.start();
-        });
+        session.setControls(tree, copyButton, saveButton);
+        saveButton.addActionListener(event -> chooseAndSaveTree(session, tree, rootNode, copyButton, saveButton));
+        copyButton.addActionListener(event -> copyTree(session, tree, rootNode, copyButton, saveButton));
+        buttonPanel.add(saveButton);
         buttonPanel.add(copyButton);
         treePanel.add(buttonPanel, BorderLayout.SOUTH);
         return treePanel;
     }
 
-    /**
-     * Generates a text representation of the tree structure.
-     *
-     * @param node the root node
-     * @param prefix the prefix for the current line
-     * @param isLast whether the current node is the last child of its parent
-     * @return the text representation of the tree
-     */
-    private String generateTreeText(DefaultMutableTreeNode node, String prefix, boolean isLast) {
-        StringBuilder result = new StringBuilder();
+    private void copyTree(
+            TabSession session,
+            Tree tree,
+            CheckboxTreeNode rootNode,
+            JButton copyButton,
+            JButton saveButton
+    ) {
+        setTreeOperationEnabled(tree, copyButton, saveButton, false);
+        int limit = positiveIntegerProperty("jettreemark.maxClipboardCharacters", DEFAULT_CLIPBOARD_LIMIT);
 
-        // Skip unchecked nodes (except the root node)
-        if (node instanceof CheckboxTreeNode checkboxNode) {
-            int state = checkboxNode.getCheckState();
-
-            // Skip if unchecked and not the root node
-            if (state == CheckboxTreeNode.UNCHECKED && node.getParent() != null) {
-                return "";
+        SwingWorker<String, Void> worker = new SwingWorker<>() {
+            @Override
+            protected String doInBackground() throws Exception {
+                return TreeTextFormatter.format(rootNode, limit, this::isCancelled);
             }
 
-            // For indeterminate nodes, we include them as they have some checked children
-        }
-
-        // Add the current node
-        if (node.getParent() != null) { // Skip the root node prefix
-            result.append(prefix).append(isLast ? "└── " : "├── ");
-            result.append(node.getUserObject());
-
-            // Add directory indicator
-            if (node.getChildCount() > 0) {
-                result.append("/");
-            }
-
-            result.append("\n");
-        } else {
-            // Root node
-            result.append(node.getUserObject()).append("/\n");
-        }
-
-        // Process children
-        String childPrefix = prefix + (isLast ? "    " : "│   ");
-
-        // Count visible children (checked or indeterminate nodes)
-        int visibleChildCount = 0;
-        for (int i = 0; i < node.getChildCount(); i++) {
-            DefaultMutableTreeNode child = (DefaultMutableTreeNode) node.getChildAt(i);
-            if (!(child instanceof CheckboxTreeNode checkboxChild)) {
-                visibleChildCount++;
-            } else {
-                int state = checkboxChild.getCheckState();
-                if (state == CheckboxTreeNode.CHECKED || state == CheckboxTreeNode.INDETERMINATE) {
-                    visibleChildCount++;
+            @Override
+            protected void done() {
+                finishWorker(session, this);
+                if (!session.isOpen()) {
+                    return;
+                }
+                setTreeOperationEnabled(tree, copyButton, saveButton, true);
+                try {
+                    String text = get();
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+                    copyButton.setText(JetTreeMarkBundle.message("copied"));
+                    Timer reset = new Timer(1_500, event -> {
+                        copyButton.setText(JetTreeMarkBundle.message("copy_tree"));
+                        session.stopTimer((Timer) event.getSource());
+                    });
+                    reset.setRepeats(false);
+                    session.startTimer(reset);
+                } catch (CancellationException ignored) {
+                    // Closing the tab or project is an expected cancellation path.
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException exception) {
+                    Throwable cause = exception.getCause();
+                    if (cause instanceof TreeTextFormatter.OutputLimitExceededException) {
+                        showWarning(tree, JetTreeMarkBundle.message("copy_too_large", limit));
+                    } else {
+                        showError(tree, JetTreeMarkBundle.message("errors.copy_failed", messageOf(cause)));
+                    }
+                } catch (IllegalStateException | HeadlessException exception) {
+                    showError(tree, JetTreeMarkBundle.message("errors.copy_failed", messageOf(exception)));
                 }
             }
-        }
-
-        // Track the current visible child index
-        int currentVisibleChild = 0;
-
-        // Process each child
-        for (int i = 0; i < node.getChildCount(); i++) {
-            DefaultMutableTreeNode child = (DefaultMutableTreeNode) node.getChildAt(i);
-
-            // Skip unchecked nodes
-            if (child instanceof CheckboxTreeNode checkboxChild) {
-                if (checkboxChild.getCheckState() == CheckboxTreeNode.UNCHECKED) {
-                    continue;
-                }
-            }
-
-            // Determine if this visible child is the last one
-            boolean childIsLast = (++currentVisibleChild == visibleChildCount);
-
-            // Generate text for this child
-            result.append(generateTreeText(child, childPrefix, childIsLast));
-        }
-
-        return result.toString();
+        };
+        startWorker(session, worker);
     }
 
-    /**
-     * Creates a tab component with a close button.
-     *
-     * @param title the title of the tab
-     * @return the tab component
-     */
-    private JPanel createTabComponent(String title) {
-        // Create a panel with FlowLayout (horizontal, left-aligned)
+    private void chooseAndSaveTree(
+            TabSession session,
+            Tree tree,
+            CheckboxTreeNode rootNode,
+            JButton copyButton,
+            JButton saveButton
+    ) {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle(JetTreeMarkBundle.message("save_tree"));
+        chooser.setSelectedFile(new java.io.File(session.rootName + ".txt"));
+        if (chooser.showSaveDialog(content) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        Path destination = chooser.getSelectedFile().toPath().toAbsolutePath();
+        if (Files.exists(destination) && JOptionPane.showConfirmDialog(content,
+                JetTreeMarkBundle.message("confirm_overwrite", destination),
+                JetTreeMarkBundle.message("save_tree"),
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+            return;
+        }
+        setTreeOperationEnabled(tree, copyButton, saveButton, false);
+        SwingWorker<Path, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Path doInBackground() throws Exception {
+                Path parent = destination.getParent();
+                Path temporary = Files.createTempFile(parent, ".jettreemark-", ".tmp");
+                boolean completed = false;
+                try {
+                    try (BufferedWriter writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                        TreeTextFormatter.write(rootNode, writer, this::isCancelled);
+                    }
+                    if (isCancelled()) {
+                        throw new CancellationException();
+                    }
+                    try {
+                        Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE,
+                                StandardCopyOption.REPLACE_EXISTING);
+                    } catch (AtomicMoveNotSupportedException ignored) {
+                        Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    completed = true;
+                } finally {
+                    if (!completed) {
+                        Files.deleteIfExists(temporary);
+                    }
+                }
+                return destination;
+            }
+
+            @Override
+            protected void done() {
+                finishWorker(session, this);
+                if (!session.isOpen()) {
+                    return;
+                }
+                setTreeOperationEnabled(tree, copyButton, saveButton, true);
+                try {
+                    Path saved = get();
+                    JOptionPane.showMessageDialog(content,
+                            JetTreeMarkBundle.message("tree_saved", saved),
+                            JetTreeMarkBundle.message("save_tree"), JOptionPane.INFORMATION_MESSAGE);
+                } catch (CancellationException ignored) {
+                    // Closing the tab or project is an expected cancellation path.
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException exception) {
+                    showError(tree, JetTreeMarkBundle.message("errors.save_failed", messageOf(exception.getCause())));
+                }
+            }
+        };
+        startWorker(session, worker);
+    }
+
+    private static void setTreeOperationEnabled(Tree tree, JButton copyButton, JButton saveButton, boolean enabled) {
+        tree.setEnabled(enabled);
+        copyButton.setEnabled(enabled);
+        saveButton.setEnabled(enabled);
+    }
+
+    private JPanel createTabComponent(String title, TabSession session) {
         JPanel tabPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         tabPanel.setOpaque(false);
-
-        // Add the title label
         JLabel titleLabel = new JLabel(title);
         titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
         tabPanel.add(titleLabel);
 
-        // Create the close button
         JButton closeButton = new JButton("×");
         closeButton.setPreferredSize(new Dimension(16, 16));
         closeButton.setToolTipText(JetTreeMarkBundle.message("close_this_tab"));
         closeButton.setContentAreaFilled(false);
-        closeButton.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+        closeButton.setBorder(BorderFactory.createEmptyBorder());
         closeButton.setBorderPainted(false);
         closeButton.setFocusable(false);
-
-        // Add action listener to close the tab
-        closeButton.addActionListener(e -> {
-            // Find the tab by its component
-            for (int i = 0; i < tabbedPane.getTabCount(); i++) {
-                if (tabPanel.equals(tabbedPane.getTabComponentAt(i))) {
-                    tabbedPane.remove(i);
-                    break;
-                }
-            }
-        });
-
+        closeButton.addActionListener(event -> closeSession(session));
         tabPanel.add(closeButton);
         return tabPanel;
     }
 
-    /**
-     * SwingWorker implementation for asynchronous tree building.
-     * This prevents UI freezing when loading large directory structures.
-     */
-    private class TreeBuilderWorker extends SwingWorker<DefaultMutableTreeNode, Void> {
-        private final VirtualFile rootFolder;
-        private final String rootName;
-        private int tabIndex;
-        private Set<String> gitignorePatterns;
-
-        public TreeBuilderWorker(VirtualFile rootFolder) {
-            this.rootFolder = rootFolder;
-            this.rootName = rootFolder.getName();
-            this.gitignorePatterns = new HashSet<>();
-            loadGitignorePatterns(rootFolder);
+    private void closeSession(TabSession session) {
+        if (session.closed) {
+            return;
         }
-
-        /**
-         * Loads patterns from .gitignore file if it exists
-         * 
-         * @param rootFolder the root folder to search for .gitignore
-         */
-        private void loadGitignorePatterns(VirtualFile rootFolder) {
-            gitignorePatterns = new HashSet<>();
-            findGitIgnore(rootFolder, gitignorePatterns);
+        session.closed = true;
+        for (SwingWorker<?, ?> worker : Set.copyOf(session.workers)) {
+            worker.cancel(true);
         }
-
-        /**
-         * Loads patterns from .gitignore file if it exists and returns them
-         * 
-         * @param folder the folder to search for .gitignore
-         * @return the set of gitignore patterns
-         */
-        private Set<String> loadGitignorePatternsForFolder(VirtualFile folder) {
-            Set<String> patterns = new HashSet<>();
-            findGitIgnore(folder, patterns);
-            return patterns;
+        session.stopTimers();
+        int index = tabbedPane.indexOfComponent(session.container);
+        if (index >= 0) {
+            tabbedPane.removeTabAt(index);
         }
+        sessions.remove(session);
+    }
 
-        private void findGitIgnore(VirtualFile folder, Set<String> patterns) {
-            VirtualFile gitignoreFile = folder.findChild(".gitignore");
-            if (gitignoreFile != null && !gitignoreFile.isDirectory() && gitignoreFile.exists()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(gitignoreFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        // Skip empty lines and comments
-                        line = line.trim();
-                        if (!line.isEmpty() && !line.startsWith("#")) {
-                            patterns.add(line);
-                        }
-                    }
-                } catch (IOException e) {
-                    logger.warning("Failed to read .gitignore file: " + e.getMessage());
-                }
+    private void startWorker(TabSession session, SwingWorker<?, ?> worker) {
+        if (disposed || session.closed) {
+            worker.cancel(true);
+            return;
+        }
+        session.workers.add(worker);
+        activeWorkers.add(worker);
+        worker.execute();
+    }
+
+    private void finishWorker(TabSession session, SwingWorker<?, ?> worker) {
+        session.workers.remove(worker);
+        activeWorkers.remove(worker);
+    }
+
+    private Tree createTree(TabSession session, DefaultTreeModel treeModel) {
+        Tree tree = new Tree(treeModel);
+        tree.setCellRenderer(new CheckboxTreeCellRenderer());
+        JPopupMenu popupMenu = new JPopupMenu(JetTreeMarkBundle.message("context_menu.title"));
+
+        JMenuItem checkAll = menuItem("context_menu.check_all_children", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.CHECK_ALL, true, true));
+        JMenuItem checkFolders = menuItem("context_menu.check_all_folders", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.FOLDERS_ONLY, true, true));
+        JMenuItem uncheckAll = menuItem("context_menu.uncheck_all_children", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.UNCHECK_ALL, true, false));
+        JMenuItem checkWithoutChildren = menuItem("context_menu.check_without_children", event -> {
+            CheckboxTreeNode node = selected(tree);
+            if (node != null) {
+                node.setCheckState(CheckboxTreeNode.CHECKED, false);
+                tree.repaint();
             }
-        }
+        });
 
-        /**
-         * Checks if a file should be ignored based on gitignore patterns
-         * 
-         * @param file the file to check
-         * @return true if the file should be ignored, false otherwise
-         */
-        private boolean shouldIgnoreFile(VirtualFile file) {
-            if (gitignorePatterns.isEmpty()) {
-                return false;
-            }
+        JMenu levelOperations = new JMenu(JetTreeMarkBundle.message("context_menu.level_operations"));
+        levelOperations.add(menuItem("context_menu.check_only_folders_this_level", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.FOLDERS_ONLY, false, true)));
+        levelOperations.add(menuItem("context_menu.check_only_files_this_level", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.FILES_ONLY, false, true)));
+        levelOperations.addSeparator();
+        levelOperations.add(menuItem("context_menu.check_all_children_this_level", event ->
+                runBulkOperation(session, tree, selectedOrRoot(tree, treeModel), BulkMode.CHECK_ALL, false, true)));
 
-            String filePath = file.getName();
+        popupMenu.add(checkAll);
+        popupMenu.add(checkFolders);
+        popupMenu.add(uncheckAll);
+        popupMenu.addSeparator();
+        popupMenu.add(checkWithoutChildren);
+        popupMenu.addSeparator();
+        popupMenu.add(levelOperations);
+        popupMenu.addSeparator();
+        popupMenu.add(menuItem("context_menu.expand_all", event -> expandTree(session, tree)));
+        popupMenu.add(menuItem("context_menu.collapse_all", event -> collapseTree(session, tree)));
 
-            // Check if the file name or path matches any pattern
-            for (String pattern : gitignorePatterns) {
-                // Simple exact match
-                if (pattern.equals(filePath)) {
-                    return true;
-                }
-
-                // Directory match (pattern ends with /)
-                if (pattern.endsWith("/") && file.isDirectory() && 
-                    pattern.substring(0, pattern.length() - 1).equals(filePath)) {
-                    return true;
-                }
-
-                // Wildcard match (pattern contains *)
-                if (pattern.contains("*")) {
-                    String regex = pattern.replace(".", "\\.").replace("*", ".*");
-                    if (filePath.matches(regex)) {
-                        return true;
+        tree.addTreeWillExpandListener(new TreeWillExpandListener() {
+            @Override
+            public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
+                if (event.getPath().getLastPathComponent() instanceof LazyDirectoryTreeNode lazyNode) {
+                    if (session.expandingAll && !lazyNode.isLoaded()) {
+                        throw new ExpandVetoException(event, "Lazy directories are skipped by Expand All");
                     }
-                }
-
-                if (pattern.startsWith("/") || pattern.startsWith("./")) {
-                    String relativePath = file.getPath().substring(rootFolder.getPath().length());
-                    if (relativePath.startsWith(pattern)) {
-                        return true;
-                    }
+                    loadLazyDirectory(session, tree, treeModel, lazyNode, event.getPath());
                 }
             }
 
-            return false;
-        }
+            @Override
+            public void treeWillCollapse(TreeExpansionEvent event) {
+                // Nothing to do.
+            }
+        });
 
-        @Override
-        protected DefaultMutableTreeNode doInBackground() {
-            // Create root node
-            CheckboxTreeNode rootNode = new CheckboxTreeNode(rootName, true);
-
-            // Build tree structure in the background
-            buildTreeNodesAsync(rootNode, rootFolder);
-
-            return rootNode;
-        }
-
-        /**
-         * Non-recursive version of buildTreeNodes to avoid stack overflow with large directories
-         */
-        private void buildTreeNodesAsync(DefaultMutableTreeNode parentNode, VirtualFile parentFile) {
-            List<Object[]> stack = new ArrayList<>();
-            stack.add(new Object[]{parentNode, parentFile});
-
-            while (!stack.isEmpty()) {
-                Object[] current = stack.removeLast();
-                DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode) current[0];
-                VirtualFile currentFile = (VirtualFile) current[1];
-
-                VirtualFile[] children = currentFile.getChildren();
-                for (VirtualFile child : children) {
-                    // Create a CheckboxTreeNode if the parent is a CheckboxTreeNode,
-                    // otherwise use DefaultMutableTreeNode
-                    DefaultMutableTreeNode childNode;
-                    if (currentNode instanceof CheckboxTreeNode) {
-                        childNode = new CheckboxTreeNode(child.getName(), child.isDirectory());
+        tree.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                int row = tree.getRowForLocation(event.getX(), event.getY());
+                if (row < 0) {
+                    return;
+                }
+                TreePath path = tree.getPathForRow(row);
+                Rectangle bounds = tree.getRowBounds(row);
+                if (path != null && bounds != null && event.getX() <= bounds.x + 20
+                        && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
+                    BulkMode mode = node.getCheckState() == CheckboxTreeNode.CHECKED
+                            ? BulkMode.UNCHECK_ALL : BulkMode.CHECK_ALL;
+                    if (node instanceof LazyDirectoryTreeNode lazyNode
+                            && !lazyNode.isLoaded() && mode == BulkMode.CHECK_ALL) {
+                        lazyNode.setCheckState(CheckboxTreeNode.CHECKED, false, true);
+                        tree.repaint();
+                        loadLazyDirectory(session, tree, treeModel, lazyNode, path);
                     } else {
-                        childNode = new DefaultMutableTreeNode(child.getName());
-                    }
-                    currentNode.add(childNode);
-
-                    if (child.isDirectory()) {
-                        // Add to the stack instead of recursing
-                        stack.add(new Object[]{childNode, child});
+                        runBulkOperation(session, tree, node, mode, true, true);
                     }
                 }
             }
 
-            // After tree construction is complete, unselect gitignore files
-            unselectGitignoreFiles(parentNode, parentFile);
+            @Override
+            public void mousePressed(MouseEvent event) {
+                maybeShowPopup(event);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                maybeShowPopup(event);
+            }
+
+            private void maybeShowPopup(MouseEvent event) {
+                if (!event.isPopupTrigger()) {
+                    return;
+                }
+                int row = tree.getRowForLocation(event.getX(), event.getY());
+                if (row >= 0) {
+                    tree.setSelectionRow(row);
+                }
+                popupMenu.show(event.getComponent(), event.getX(), event.getY());
+            }
+        });
+        return tree;
+    }
+
+    private static JMenuItem menuItem(String key, java.awt.event.ActionListener listener) {
+        JMenuItem item = new JMenuItem(JetTreeMarkBundle.message(key));
+        item.addActionListener(listener);
+        return item;
+    }
+
+    private static CheckboxTreeNode selected(Tree tree) {
+        TreePath path = tree.getSelectionPath();
+        return path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node ? node : null;
+    }
+
+    private static CheckboxTreeNode selectedOrRoot(Tree tree, DefaultTreeModel model) {
+        CheckboxTreeNode selected = selected(tree);
+        return selected != null ? selected : (CheckboxTreeNode) model.getRoot();
+    }
+
+    private void loadLazyDirectory(
+            TabSession session,
+            Tree tree,
+            DefaultTreeModel model,
+            LazyDirectoryTreeNode node,
+            TreePath path
+    ) {
+        if (!node.beginLoading()) {
+            return;
+        }
+        session.setControlsEnabled(false);
+
+        SwingWorker<CheckboxTreeNode, Void> worker = new SwingWorker<>() {
+            @Override
+            protected CheckboxTreeNode doInBackground() {
+                CheckboxTreeNode loadedRoot = new VirtualFileTreeBuilder(
+                        node.directory(), this::isCancelled,
+                        node.relativePath(), node.inheritedMatcher(), vcsIgnoreProvider).build();
+
+                // Selection can change while the VFS traversal runs. Reapply if it did.
+                LazyDirectoryTreeNode.DescendantSelection applied;
+                do {
+                    applied = node.descendantSelection();
+                    applyDescendantSelection(loadedRoot, applied);
+                } while (applied != node.descendantSelection() && !isCancelled());
+                return loadedRoot;
+            }
+
+            @Override
+            protected void done() {
+                finishWorker(session, this);
+                if (!session.isOpen()) {
+                    return;
+                }
+                try {
+                    boolean wasExpanded = tree.isExpanded(path);
+                    node.finishLoading(get());
+                    model.reload(node);
+                    if (wasExpanded) {
+                        SwingUtilities.invokeLater(() -> tree.expandPath(path));
+                    }
+                } catch (CancellationException ignored) {
+                    // Closing the tab or project is an expected cancellation path.
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException exception) {
+                    node.loadingFailed();
+                    model.reload(node);
+                    LOGGER.log(Level.WARNING, "Unable to lazily load directory", exception.getCause());
+                    showError(tree, JetTreeMarkBundle.message(
+                            "errors.unable_to_load_directory", messageOf(exception.getCause())));
+                } finally {
+                    if (session.isOpen()) {
+                        session.setControlsEnabled(true);
+                    }
+                }
+            }
+        };
+        startWorker(session, worker);
+    }
+
+    private static void applyDescendantSelection(
+            CheckboxTreeNode root,
+            LazyDirectoryTreeNode.DescendantSelection selection
+    ) {
+        switch (selection) {
+            case CHECKED -> root.checkAll(true);
+            case UNCHECKED -> root.uncheckAll(true);
+            case FOLDERS_ONLY -> root.checkOnlyFolders(true);
+            case FILES_ONLY -> root.checkOnlyFiles(true);
         }
 
-        /**
-         * Unselects nodes that match gitignore patterns at the current level
-         * For folders that match gitignore patterns, uncheck them with propagation to children
-         * Only traverse into folders that don't match gitignore patterns
-         * <p>
-         * Non-recursive version to avoid calling VirtualFile.getChildren() from a recursive method
-         * 
-         * @param parentNode the parent node in the tree
-         * @param parentFile the parent file in the file system
-         */
-        private void unselectGitignoreFiles(DefaultMutableTreeNode parentNode, VirtualFile parentFile) {
-            if (!(parentNode instanceof CheckboxTreeNode)) {
+        Deque<CheckboxTreeNode> pending = new ArrayDeque<>();
+        pending.addLast(root);
+        while (!pending.isEmpty()) {
+            CheckboxTreeNode current = pending.removeLast();
+            if (current instanceof LazyDirectoryTreeNode lazyNode) {
+                lazyNode.setDescendantSelection(selection);
+            }
+            for (int i = 0; i < current.getChildCount(); i++) {
+                if (current.getChildAt(i) instanceof CheckboxTreeNode child) {
+                    pending.addLast(child);
+                }
+            }
+        }
+    }
+
+    private void runBulkOperation(
+            TabSession session,
+            Tree tree,
+            CheckboxTreeNode start,
+            BulkMode mode,
+            boolean recursive,
+            boolean includeStart
+    ) {
+        Deque<MutationFrame> pending = new ArrayDeque<>();
+        if (includeStart) {
+            pending.addLast(new MutationFrame(start, 0));
+        } else {
+            addMutationChildren(start, 1, pending);
+        }
+        session.setControlsEnabled(false);
+
+        Timer timer = new Timer(1, null);
+        timer.addActionListener(event -> {
+            int processed = 0;
+            while (processed++ < UI_BATCH_SIZE && !pending.isEmpty()) {
+                MutationFrame frame = pending.removeLast();
+                CheckboxTreeNode node = frame.node();
+                node.setCheckState(mode.stateFor(node), false, false);
+                if (node instanceof LazyDirectoryTreeNode lazyNode) {
+                    lazyNode.setDescendantSelection(mode.descendantSelection());
+                }
+                if (recursive || frame.depth() == 0) {
+                    addMutationChildren(node, frame.depth() + 1, pending);
+                }
+            }
+            if (!pending.isEmpty()) {
                 return;
             }
 
-            // Use a stack to avoid recursion
-            List<Object[]> stack = new ArrayList<>();
-
-            // Each stack entry contains: [node, file, patterns]
-            stack.add(new Object[]{parentNode, parentFile, new HashSet<>(gitignorePatterns)});
-
-            while (!stack.isEmpty()) {
-                Object[] current = stack.removeLast();
-                DefaultMutableTreeNode currentNode = (DefaultMutableTreeNode) current[0];
-                VirtualFile currentFile = (VirtualFile) current[1];
-                @SuppressWarnings("unchecked")
-                Set<String> currentPatterns = (Set<String>) current[2];
-
-                // Temporarily set the patterns for this level
-                Set<String> originalPatterns = gitignorePatterns;
-                gitignorePatterns = currentPatterns;
-
-                logger.info(gitignorePatterns.toString());
-
-                if (currentNode instanceof CheckboxTreeNode) {
-                    VirtualFile[] children = currentFile.getChildren();
-                    for (int i = 0; i < Math.min(children.length, currentNode.getChildCount()); i++) {
-                        VirtualFile childFile = children[i];
-                        DefaultMutableTreeNode childNode = (DefaultMutableTreeNode) currentNode.getChildAt(i);
-
-                        if (childNode instanceof CheckboxTreeNode) {
-                            if (shouldIgnoreFile(childFile)) {
-                                // If it's a folder that matches gitignore pattern,
-                                // uncheck it with propagation to children
-                                // If it's a file that matches gitignore pattern,
-                                // just uncheck it
-                                ((CheckboxTreeNode) childNode).setCheckState(CheckboxTreeNode.UNCHECKED, childFile.isDirectory(), false);
-                            } else if (childFile.isDirectory() && childNode.getChildCount() > 0) {
-                                // Only traverse into folders that don't match gitignore patterns
-                                // Check if the folder has a .gitignore file
-                                // and load its patterns
-                                Set<String> folderPatterns = loadGitignorePatternsForFolder(childFile);
-
-                                // Combine the current patterns with the folder's patterns
-                                Set<String> combinedPatterns = new HashSet<>(currentPatterns);
-                                combinedPatterns.addAll(folderPatterns);
-
-                                // Add this child to the stack with its combined patterns
-                                stack.add(new Object[]{childNode, childFile, combinedPatterns});
-                            }
-                        }
-                    }
-                }
-
-                // Restore the original patterns
-                gitignorePatterns = originalPatterns;
+            session.stopTimer(timer);
+            if (start.getParent() instanceof CheckboxTreeNode parent) {
+                parent.updateParentCheckState();
             }
+            if (session.isOpen()) {
+                session.setControlsEnabled(true);
+                tree.repaint();
+            }
+        });
+        session.startTimer(timer);
+    }
+
+    private static void addMutationChildren(
+            CheckboxTreeNode node,
+            int depth,
+            Deque<MutationFrame> pending
+    ) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof CheckboxTreeNode child) {
+                pending.addLast(new MutationFrame(child, depth));
+            }
+        }
+    }
+
+    private void expandTree(TabSession session, Tree tree) {
+        int maximumRows = positiveIntegerProperty("jettreemark.maxExpandedRows", DEFAULT_EXPAND_LIMIT);
+        session.setControlsEnabled(false);
+        session.expandingAll = true;
+        int[] row = {0};
+        Timer timer = new Timer(1, null);
+        timer.addActionListener(event -> {
+            int processed = 0;
+            while (processed++ < UI_BATCH_SIZE && row[0] < tree.getRowCount() && row[0] < maximumRows) {
+                tree.expandRow(row[0]++);
+            }
+            if (row[0] < tree.getRowCount() && row[0] >= maximumRows) {
+                session.stopTimer(timer);
+                session.expandingAll = false;
+                session.setControlsEnabled(true);
+                showWarning(tree, JetTreeMarkBundle.message("expand_limit_reached", maximumRows));
+            } else if (row[0] >= tree.getRowCount()) {
+                session.stopTimer(timer);
+                session.expandingAll = false;
+                session.setControlsEnabled(true);
+            }
+        });
+        session.startTimer(timer);
+    }
+
+    private void collapseTree(TabSession session, Tree tree) {
+        session.setControlsEnabled(false);
+        int[] row = {tree.getRowCount() - 1};
+        Timer timer = new Timer(1, null);
+        timer.addActionListener(event -> {
+            int processed = 0;
+            while (processed++ < UI_BATCH_SIZE && row[0] >= 0) {
+                tree.collapseRow(row[0]--);
+                row[0] = Math.min(row[0], tree.getRowCount() - 1);
+            }
+            if (row[0] < 0) {
+                session.stopTimer(timer);
+                session.setControlsEnabled(true);
+            }
+        });
+        session.startTimer(timer);
+    }
+
+    private static int positiveIntegerProperty(String key, int defaultValue) {
+        int value = Integer.getInteger(key, defaultValue);
+        return value > 0 ? value : defaultValue;
+    }
+
+    private void showWarning(Component parent, String message) {
+        JOptionPane.showMessageDialog(parent, message,
+                JetTreeMarkBundle.message("warning"), JOptionPane.WARNING_MESSAGE);
+    }
+
+    private void showError(Component parent, String message) {
+        JOptionPane.showMessageDialog(parent, message,
+                JetTreeMarkBundle.message("error"), JOptionPane.ERROR_MESSAGE);
+    }
+
+    private static String messageOf(Throwable throwable) {
+        return throwable == null || throwable.getMessage() == null
+                ? String.valueOf(throwable) : throwable.getMessage();
+    }
+
+    private final class TreeBuilderWorker extends SwingWorker<CheckboxTreeNode, Void> {
+        private final TabSession session;
+        private final VirtualFile rootFolder;
+
+        private TreeBuilderWorker(TabSession session, VirtualFile rootFolder) {
+            this.session = session;
+            this.rootFolder = rootFolder;
+        }
+
+        @Override
+        protected CheckboxTreeNode doInBackground() {
+            return new VirtualFileTreeBuilder(rootFolder, this::isCancelled, vcsIgnoreProvider).build();
         }
 
         @Override
         protected void done() {
+            finishWorker(session, this);
+            if (isCancelled() || !session.isOpen()) {
+                return;
+            }
             try {
-                // Get the built tree root node
-                DefaultMutableTreeNode rootNode = get();
+                CheckboxTreeNode rootNode = get();
+                DefaultTreeModel model = new DefaultTreeModel(rootNode);
+                Tree tree = createTree(session, model);
+                session.setContent(createTreeViewPanel(session, tree, rootNode));
+                session.setTitle(session.rootName + " (" + session.number + ")");
+            } catch (CancellationException ignored) {
+                // Closing the tab or project is an expected cancellation path.
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException exception) {
+                LOGGER.log(Level.WARNING, "Error building tree", exception.getCause());
+                session.showError(JetTreeMarkBundle.message(
+                        "errors.unable_to_load_directory", messageOf(exception.getCause())));
+            }
+        }
+    }
 
-                // Create a tree model and tree
-                DefaultTreeModel treeModel = new DefaultTreeModel(rootNode);
-                Tree tree = getTree(treeModel);
+    private final class TabSession {
+        private final String rootName;
+        private final int number;
+        private final JPanel container = new JPanel(new BorderLayout());
+        private final Set<SwingWorker<?, ?>> workers =
+                Collections.newSetFromMap(new IdentityHashMap<>());
+        private final Set<Timer> timers = Collections.newSetFromMap(new IdentityHashMap<>());
+        private Tree tree;
+        private JButton copyButton;
+        private JButton saveButton;
+        private boolean expandingAll;
+        private boolean closed;
 
-                // Create a panel for the tree view and copy button
-                JPanel treePanel = createTreeViewPanel(tree, (CheckboxTreeNode) rootNode);
+        private TabSession(String rootName, int number) {
+            this.rootName = rootName;
+            this.number = number;
+        }
 
-                // Replace the loading panel with the tree panel
-                tabbedPane.setComponentAt(tabIndex, treePanel);
+        private void showLoadingPanel() {
+            JPanel loadingPanel = new JPanel(new BorderLayout());
+            loadingPanel.add(new JLabel(
+                    JetTreeMarkBundle.message("loading_of.text") + " " + rootName + "...",
+                    SwingConstants.CENTER), BorderLayout.CENTER);
+            JProgressBar progressBar = new JProgressBar();
+            progressBar.setIndeterminate(true);
+            loadingPanel.add(progressBar, BorderLayout.SOUTH);
+            setContent(loadingPanel);
 
-                // Update the tab title to remove "Loading..." text
-                String tabTitle = rootName + " (" + (tabCounter - 1) + ")";
-                tabbedPane.setTitleAt(tabIndex, tabTitle);
-                tabbedPane.setTabComponentAt(tabIndex, createTabComponent(tabTitle));
+            String title = rootName + JetTreeMarkBundle.message("loading.text");
+            tabbedPane.addTab(title, container);
+            int index = tabbedPane.indexOfComponent(container);
+            tabbedPane.setTabComponentAt(index, createTabComponent(title, this));
+            tabbedPane.setSelectedIndex(index);
+        }
 
-            } catch (InterruptedException | ExecutionException e) {
-                logger.severe("Error building tree: " + e.getMessage());
-                // Show error in the tab
-                JLabel errorLabel = new JLabel(JetTreeMarkBundle.message("errors.unable_to_load_directory")+": " + e.getMessage());
-                errorLabel.setForeground(JBColor.RED);
-                tabbedPane.setComponentAt(tabIndex, errorLabel);
+        private void setContent(Component component) {
+            container.removeAll();
+            container.add(component, BorderLayout.CENTER);
+            container.revalidate();
+            container.repaint();
+        }
+
+        private void setTitle(String title) {
+            int index = tabbedPane.indexOfComponent(container);
+            if (index >= 0) {
+                tabbedPane.setTitleAt(index, title);
+                tabbedPane.setTabComponentAt(index, createTabComponent(title, this));
             }
         }
 
-        private static @NotNull Tree getTree(DefaultTreeModel treeModel) {
-            Tree tree = new Tree(treeModel);
-
-            // Set the cell renderer to display checkboxes
-            tree.setCellRenderer(new CheckboxTreeCellRenderer());
-
-            // Create a popup menu for tree operations
-            JPopupMenu popupMenu = new JPopupMenu(JetTreeMarkBundle.message("context_menu.title"));
-
-            // Add menu items for tree operations (all levels)
-            JMenuItem checkAllChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_children"));
-            JMenuItem checkAllFoldersItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_folders"));
-            JMenuItem uncheckAllChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.uncheck_all_children"));
-            JMenuItem checkWithoutChildrenItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_without_children"));
-            JMenuItem expandAllItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.expand_all"));
-            JMenuItem collapseAllItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.collapse_all"));
-
-            // Create a submenu for level-specific operations
-            JMenu levelOperationsMenu = new JMenu(JetTreeMarkBundle.message("context_menu.level_operations"));
-            JMenuItem checkOnlyFoldersThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_only_folders_this_level"));
-            JMenuItem checkOnlyFilesThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_only_files_this_level"));
-            JMenuItem checkAllThisLevelItem = new JMenuItem(JetTreeMarkBundle.message("context_menu.check_all_children_this_level"));
-
-            // Add action listeners to menu items (all levels)
-            checkAllChildrenItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.checkAll(true);
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).checkAll();
-                    }
-                }
-                tree.repaint();
-            });
-
-            checkAllFoldersItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.checkOnlyFolders();
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).checkOnlyFolders();
-                    }
-                }
-                tree.repaint();
-            });
-
-            uncheckAllChildrenItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.uncheckAll();
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).uncheckAll();
-                    }
-                }
-                tree.repaint();
-            });
-
-            checkWithoutChildrenItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.setCheckState(CheckboxTreeNode.CHECKED, false);
-                    tree.repaint();
-                }
-            });
-
-            // Add action listeners to level-specific menu items
-            checkOnlyFoldersThisLevelItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.checkOnlyFolders(false);
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).checkOnlyFolders(false);
-                    }
-                }
-                tree.repaint();
-            });
-
-            checkOnlyFilesThisLevelItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.checkOnlyFiles(false);
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).checkOnlyFiles(false);
-                    }
-                }
-                tree.repaint();
-            });
-
-            checkAllThisLevelItem.addActionListener(e -> {
-                TreePath path = tree.getSelectionPath();
-                if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                    node.checkAll(false);
-                } else {
-                    DefaultMutableTreeNode root = (DefaultMutableTreeNode) treeModel.getRoot();
-                    if (root instanceof CheckboxTreeNode) {
-                        ((CheckboxTreeNode) root).checkAll(false);
-                    }
-                }
-                tree.repaint();
-            });
-
-            expandAllItem.addActionListener(e -> {
-                for (int i = 0; i < tree.getRowCount(); i++) {
-                    tree.expandRow(i);
-                }
-            });
-
-            collapseAllItem.addActionListener(e -> {
-                for (int i = tree.getRowCount() - 1; i >= 0; i--) {
-                    tree.collapseRow(i);
-                }
-            });
-
-            // Add level-specific items to submenu
-            levelOperationsMenu.add(checkOnlyFoldersThisLevelItem);
-            levelOperationsMenu.add(checkOnlyFilesThisLevelItem);
-            levelOperationsMenu.addSeparator();
-            levelOperationsMenu.add(checkAllThisLevelItem);
-
-            // Add menu items to popup menu
-            popupMenu.add(checkAllChildrenItem);
-            popupMenu.add(checkAllFoldersItem);
-            popupMenu.add(uncheckAllChildrenItem);
-            popupMenu.addSeparator();
-            popupMenu.add(checkWithoutChildrenItem);
-            popupMenu.addSeparator();
-            popupMenu.add(levelOperationsMenu);
-            popupMenu.addSeparator();
-            popupMenu.add(expandAllItem);
-            popupMenu.add(collapseAllItem);
-
-            // Add mouse listener to handle checkbox clicks and show context menu
-            tree.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    int x = e.getX();
-                    int y = e.getY();
-                    int row = tree.getRowForLocation(x, y);
-
-                    if (row != -1) {
-                        TreePath path = tree.getPathForRow(row);
-                        if (path != null && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
-                            Rectangle checkBoxBounds = tree.getRowBounds(row);
-
-                            // Check if click was on the checkbox (roughly the first 20 pixels)
-                            if (x <= checkBoxBounds.x + 20) {
-                                // Cycle through the states: UNCHECKED -> CHECKED -> UNCHECKED
-                                if (node.getCheckState() == CheckboxTreeNode.CHECKED) {
-                                    node.setCheckState(CheckboxTreeNode.UNCHECKED);
-                                } else {
-                                    node.setCheckState(CheckboxTreeNode.CHECKED);
-                                }
-                                // Repaint the tree
-                                tree.repaint();
-                            }
-                        }
-                    }
-                }
-
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    maybeShowPopup(e);
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    maybeShowPopup(e);
-                }
-
-                private void maybeShowPopup(MouseEvent e) {
-                    if (e.isPopupTrigger()) {
-                        int row = tree.getRowForLocation(e.getX(), e.getY());
-                        if (row != -1) {
-                            tree.setSelectionRow(row);
-                        }
-                        popupMenu.show(e.getComponent(), e.getX(), e.getY());
-                    }
-                }
-            });
-            return tree;
+        private void showError(String message) {
+            JLabel error = new JLabel(message, SwingConstants.CENTER);
+            error.setForeground(JBColor.RED);
+            setContent(error);
         }
 
-        /**
-         * Creates and shows a loading panel in a new tab
-         */
-        public void showLoadingPanel() {
-            JPanel loadingPanel = new JPanel(new BorderLayout());
-            JLabel loadingLabel = new JLabel(JetTreeMarkBundle.message("loading_of.text") + " " + rootName + "...", SwingConstants.CENTER);
+        private void setControls(Tree tree, JButton copyButton, JButton saveButton) {
+            this.tree = tree;
+            this.copyButton = copyButton;
+            this.saveButton = saveButton;
+        }
 
-            // Add a spinner icon
-            JProgressBar progressBar = new JProgressBar();
-            progressBar.setIndeterminate(true);
+        private void setControlsEnabled(boolean enabled) {
+            if (tree != null) {
+                tree.setEnabled(enabled);
+            }
+            if (copyButton != null) {
+                copyButton.setEnabled(enabled);
+            }
+            if (saveButton != null) {
+                saveButton.setEnabled(enabled);
+            }
+        }
 
-            loadingPanel.add(loadingLabel, BorderLayout.CENTER);
-            loadingPanel.add(progressBar, BorderLayout.SOUTH);
+        private boolean isOpen() {
+            return !disposed && !closed && tabbedPane.indexOfComponent(container) >= 0;
+        }
 
-            // Add a new tab with the loading panel
-            String tabTitle = rootName + JetTreeMarkBundle.message("loading.text");
-            tabbedPane.addTab(tabTitle, loadingPanel);
+        private void startTimer(Timer timer) {
+            if (isOpen()) {
+                timers.add(timer);
+                timer.start();
+            }
+        }
 
-            // Store the tab index for later use
-            tabIndex = tabbedPane.getTabCount() - 1;
+        private void stopTimer(Timer timer) {
+            timer.stop();
+            timers.remove(timer);
+        }
 
-            // Select the new tab
-            tabbedPane.setSelectedIndex(tabIndex);
+        private void stopTimers() {
+            for (Timer timer : Set.copyOf(timers)) {
+                timer.stop();
+            }
+            timers.clear();
         }
     }
+
+    private enum BulkMode {
+        CHECK_ALL,
+        UNCHECK_ALL,
+        FOLDERS_ONLY,
+        FILES_ONLY;
+
+        private int stateFor(CheckboxTreeNode node) {
+            return switch (this) {
+                case CHECK_ALL, FILES_ONLY -> CheckboxTreeNode.CHECKED;
+                case UNCHECK_ALL -> CheckboxTreeNode.UNCHECKED;
+                case FOLDERS_ONLY -> node.isFolder()
+                        ? CheckboxTreeNode.CHECKED : CheckboxTreeNode.UNCHECKED;
+            };
+        }
+
+        private LazyDirectoryTreeNode.DescendantSelection descendantSelection() {
+            return switch (this) {
+                case CHECK_ALL -> LazyDirectoryTreeNode.DescendantSelection.CHECKED;
+                case UNCHECK_ALL -> LazyDirectoryTreeNode.DescendantSelection.UNCHECKED;
+                case FOLDERS_ONLY -> LazyDirectoryTreeNode.DescendantSelection.FOLDERS_ONLY;
+                case FILES_ONLY -> LazyDirectoryTreeNode.DescendantSelection.FILES_ONLY;
+            };
+        }
+    }
+
+    private record MutationFrame(CheckboxTreeNode node, int depth) {
+    }
+
 }

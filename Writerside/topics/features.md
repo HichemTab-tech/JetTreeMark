@@ -10,6 +10,9 @@ JetTreeMark offers a smooth and simple way to generate and share your project’
 - 📋 **Copy to Clipboard**  
   One-click button to copy the final tree to your clipboard — ready to paste anywhere.
 
+- 💾 **Save Large Trees**
+  Stream large tree output to a UTF-8 text file when it is too large for the clipboard.
+
 - ✂️ **Exclude Files or Folders**  
   Select items you don't want in your final tree before copying.
 
