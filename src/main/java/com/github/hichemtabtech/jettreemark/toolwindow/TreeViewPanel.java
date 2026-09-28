@@ -2,6 +2,7 @@ package com.github.hichemtabtech.jettreemark.toolwindow;
 
 import com.github.hichemtabtech.jettreemark.JetTreeMarkBundle;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
@@ -13,7 +14,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jspecify.annotations.NonNull;
 
 import javax.swing.*;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeWillExpandListener;
 import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
@@ -50,10 +54,20 @@ public class TreeViewPanel implements Disposable {
             Collections.newSetFromMap(new IdentityHashMap<>());
     private final Set<TabSession> sessions =
             Collections.newSetFromMap(new IdentityHashMap<>());
+    private final VcsIgnoreProvider vcsIgnoreProvider;
     private int nextTabNumber = 1;
     private boolean disposed;
 
     public TreeViewPanel() {
+        this(VcsIgnoreProvider.NONE);
+    }
+
+    public TreeViewPanel(@NotNull Project project) {
+        this(VcsIgnoreProvider.forProject(project));
+    }
+
+    TreeViewPanel(@NotNull VcsIgnoreProvider vcsIgnoreProvider) {
+        this.vcsIgnoreProvider = vcsIgnoreProvider;
         content.add(tabbedPane, BorderLayout.CENTER);
         tabbedPane.addTab(JetTreeMarkBundle.message("welcome"), createWelcomePanel());
     }
@@ -362,6 +376,23 @@ public class TreeViewPanel implements Disposable {
         popupMenu.add(menuItem("context_menu.expand_all", event -> expandTree(session, tree)));
         popupMenu.add(menuItem("context_menu.collapse_all", event -> collapseTree(session, tree)));
 
+        tree.addTreeWillExpandListener(new TreeWillExpandListener() {
+            @Override
+            public void treeWillExpand(TreeExpansionEvent event) throws ExpandVetoException {
+                if (event.getPath().getLastPathComponent() instanceof LazyDirectoryTreeNode lazyNode) {
+                    if (session.expandingAll && !lazyNode.isLoaded()) {
+                        throw new ExpandVetoException(event, "Lazy directories are skipped by Expand All");
+                    }
+                    loadLazyDirectory(session, tree, treeModel, lazyNode, event.getPath());
+                }
+            }
+
+            @Override
+            public void treeWillCollapse(TreeExpansionEvent event) {
+                // Nothing to do.
+            }
+        });
+
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent event) {
@@ -375,7 +406,14 @@ public class TreeViewPanel implements Disposable {
                         && path.getLastPathComponent() instanceof CheckboxTreeNode node) {
                     BulkMode mode = node.getCheckState() == CheckboxTreeNode.CHECKED
                             ? BulkMode.UNCHECK_ALL : BulkMode.CHECK_ALL;
-                    runBulkOperation(session, tree, node, mode, true, true);
+                    if (node instanceof LazyDirectoryTreeNode lazyNode
+                            && !lazyNode.isLoaded() && mode == BulkMode.CHECK_ALL) {
+                        lazyNode.setCheckState(CheckboxTreeNode.CHECKED, false, true);
+                        tree.repaint();
+                        loadLazyDirectory(session, tree, treeModel, lazyNode, path);
+                    } else {
+                        runBulkOperation(session, tree, node, mode, true, true);
+                    }
                 }
             }
 
@@ -419,6 +457,93 @@ public class TreeViewPanel implements Disposable {
         return selected != null ? selected : (CheckboxTreeNode) model.getRoot();
     }
 
+    private void loadLazyDirectory(
+            TabSession session,
+            Tree tree,
+            DefaultTreeModel model,
+            LazyDirectoryTreeNode node,
+            TreePath path
+    ) {
+        if (!node.beginLoading()) {
+            return;
+        }
+        session.setControlsEnabled(false);
+
+        SwingWorker<CheckboxTreeNode, Void> worker = new SwingWorker<>() {
+            @Override
+            protected CheckboxTreeNode doInBackground() {
+                CheckboxTreeNode loadedRoot = new VirtualFileTreeBuilder(
+                        node.directory(), this::isCancelled,
+                        node.relativePath(), node.inheritedMatcher(), vcsIgnoreProvider).build();
+
+                // Selection can change while the VFS traversal runs. Reapply if it did.
+                LazyDirectoryTreeNode.DescendantSelection applied;
+                do {
+                    applied = node.descendantSelection();
+                    applyDescendantSelection(loadedRoot, applied);
+                } while (applied != node.descendantSelection() && !isCancelled());
+                return loadedRoot;
+            }
+
+            @Override
+            protected void done() {
+                finishWorker(session, this);
+                if (!session.isOpen()) {
+                    return;
+                }
+                try {
+                    boolean wasExpanded = tree.isExpanded(path);
+                    node.finishLoading(get());
+                    model.reload(node);
+                    if (wasExpanded) {
+                        SwingUtilities.invokeLater(() -> tree.expandPath(path));
+                    }
+                } catch (CancellationException ignored) {
+                    // Closing the tab or project is an expected cancellation path.
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException exception) {
+                    node.loadingFailed();
+                    model.reload(node);
+                    LOGGER.log(Level.WARNING, "Unable to lazily load directory", exception.getCause());
+                    showError(tree, JetTreeMarkBundle.message(
+                            "errors.unable_to_load_directory", messageOf(exception.getCause())));
+                } finally {
+                    if (session.isOpen()) {
+                        session.setControlsEnabled(true);
+                    }
+                }
+            }
+        };
+        startWorker(session, worker);
+    }
+
+    private static void applyDescendantSelection(
+            CheckboxTreeNode root,
+            LazyDirectoryTreeNode.DescendantSelection selection
+    ) {
+        switch (selection) {
+            case CHECKED -> root.checkAll(true);
+            case UNCHECKED -> root.uncheckAll(true);
+            case FOLDERS_ONLY -> root.checkOnlyFolders(true);
+            case FILES_ONLY -> root.checkOnlyFiles(true);
+        }
+
+        Deque<CheckboxTreeNode> pending = new ArrayDeque<>();
+        pending.addLast(root);
+        while (!pending.isEmpty()) {
+            CheckboxTreeNode current = pending.removeLast();
+            if (current instanceof LazyDirectoryTreeNode lazyNode) {
+                lazyNode.setDescendantSelection(selection);
+            }
+            for (int i = 0; i < current.getChildCount(); i++) {
+                if (current.getChildAt(i) instanceof CheckboxTreeNode child) {
+                    pending.addLast(child);
+                }
+            }
+        }
+    }
+
     private void runBulkOperation(
             TabSession session,
             Tree tree,
@@ -442,6 +567,9 @@ public class TreeViewPanel implements Disposable {
                 MutationFrame frame = pending.removeLast();
                 CheckboxTreeNode node = frame.node();
                 node.setCheckState(mode.stateFor(node), false, false);
+                if (node instanceof LazyDirectoryTreeNode lazyNode) {
+                    lazyNode.setDescendantSelection(mode.descendantSelection());
+                }
                 if (recursive || frame.depth() == 0) {
                     addMutationChildren(node, frame.depth() + 1, pending);
                 }
@@ -477,6 +605,7 @@ public class TreeViewPanel implements Disposable {
     private void expandTree(TabSession session, Tree tree) {
         int maximumRows = positiveIntegerProperty("jettreemark.maxExpandedRows", DEFAULT_EXPAND_LIMIT);
         session.setControlsEnabled(false);
+        session.expandingAll = true;
         int[] row = {0};
         Timer timer = new Timer(1, null);
         timer.addActionListener(event -> {
@@ -486,10 +615,12 @@ public class TreeViewPanel implements Disposable {
             }
             if (row[0] < tree.getRowCount() && row[0] >= maximumRows) {
                 session.stopTimer(timer);
+                session.expandingAll = false;
                 session.setControlsEnabled(true);
                 showWarning(tree, JetTreeMarkBundle.message("expand_limit_reached", maximumRows));
             } else if (row[0] >= tree.getRowCount()) {
                 session.stopTimer(timer);
+                session.expandingAll = false;
                 session.setControlsEnabled(true);
             }
         });
@@ -545,7 +676,7 @@ public class TreeViewPanel implements Disposable {
 
         @Override
         protected CheckboxTreeNode doInBackground() {
-            return new VirtualFileTreeBuilder(rootFolder, this::isCancelled).build();
+            return new VirtualFileTreeBuilder(rootFolder, this::isCancelled, vcsIgnoreProvider).build();
         }
 
         @Override
@@ -582,6 +713,7 @@ public class TreeViewPanel implements Disposable {
         private Tree tree;
         private JButton copyButton;
         private JButton saveButton;
+        private boolean expandingAll;
         private boolean closed;
 
         private TabSession(String rootName, int number) {
@@ -681,6 +813,15 @@ public class TreeViewPanel implements Disposable {
                 case UNCHECK_ALL -> CheckboxTreeNode.UNCHECKED;
                 case FOLDERS_ONLY -> node.isFolder()
                         ? CheckboxTreeNode.CHECKED : CheckboxTreeNode.UNCHECKED;
+            };
+        }
+
+        private LazyDirectoryTreeNode.DescendantSelection descendantSelection() {
+            return switch (this) {
+                case CHECK_ALL -> LazyDirectoryTreeNode.DescendantSelection.CHECKED;
+                case UNCHECK_ALL -> LazyDirectoryTreeNode.DescendantSelection.UNCHECKED;
+                case FOLDERS_ONLY -> LazyDirectoryTreeNode.DescendantSelection.FOLDERS_ONLY;
+                case FILES_ONLY -> LazyDirectoryTreeNode.DescendantSelection.FILES_ONLY;
             };
         }
     }

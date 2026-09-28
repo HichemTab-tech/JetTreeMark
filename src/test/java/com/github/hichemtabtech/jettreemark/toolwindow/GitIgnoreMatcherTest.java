@@ -56,6 +56,18 @@ public class GitIgnoreMatcherTest {
         assertFalse(matcher.isIgnored("name", false));
     }
 
+    @Test
+    public void reIncludesGitkeepFromIgnoredDirectoryContents() throws Exception {
+        GitIgnoreMatcher matcher = rules("", ".idea\nnotes.md\nignoreme-folder/*\n!ignoreme-folder/.gitkeep\n");
+
+        assertTrue(matcher.isIgnored(".idea", true));
+        assertTrue(matcher.isIgnored("notes.md", false));
+        assertFalse(matcher.isIgnored("ignoreme-folder", true));
+        assertTrue(matcher.isIgnored("ignoreme-folder/ignored.txt", false));
+        assertFalse(matcher.isIgnored("ignoreme-folder/.gitkeep", false));
+    }
+
+    @SuppressWarnings("SameParameterValue")
     private static GitIgnoreMatcher rules(String base, String contents) throws Exception {
         return GitIgnoreMatcher.EMPTY.withRules(base, reader(contents));
     }

@@ -19,7 +19,7 @@ public class TreeViewToolWindowFactory implements ToolWindowFactory {
 
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
-        TreeViewPanel treeViewPanel = new TreeViewPanel();
+        TreeViewPanel treeViewPanel = new TreeViewPanel(project);
         project.putUserData(PROJECT_PANEL, treeViewPanel);
 
         Content content = ContentFactory.getInstance().createContent(treeViewPanel.getContent(), null, false);

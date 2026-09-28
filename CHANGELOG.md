@@ -7,7 +7,8 @@
 ### Changed
 
 - Make large tree loading, selection, copying, and tab cleanup cancellable and memory-safe.
-- Apply ordered `.gitignore` rules while building the tree and skip ignored directory contents.
+- Use the IDE's VCS ignore status for version-controlled files, with ordered `.gitignore` matching as a fallback,
+  and load ignored directory contents on demand.
 
 ### Added
 

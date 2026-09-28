@@ -101,6 +101,8 @@ You can find it on the Visual Studio Code Marketplace [here](https://marketplace
 
 3. A **JetTreeMark Tool Window** will open, showing the folder structure.
 4. **Optionally**, select which files or folders you want to **exclude** from the final tree.
+   VCS-ignored entries start unchecked. Ignored directories load their contents only when you expand or directly
+   check them.
 
    ![How to use the JetTreeMark plugin to exclude nodes from the tree view result](meta/screenshot-2.png "Screenshot - filter nodes from tree results -")
 

@@ -28,6 +28,7 @@ The intuitive features save time and improve your workflow.
     ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
 
 
     <resource-bundle>messages.JetTreeMarkBundle</resource-bundle>

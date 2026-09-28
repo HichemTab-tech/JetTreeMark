@@ -21,17 +21,50 @@ final class VirtualFileTreeBuilder {
 
     private final VirtualFile rootFolder;
     private final BooleanSupplier cancelled;
+    private final String rootRelativePath;
+    private final GitIgnoreMatcher inheritedMatcher;
+    private final VcsIgnoreProvider vcsIgnoreProvider;
 
     VirtualFileTreeBuilder(@NotNull VirtualFile rootFolder, @NotNull BooleanSupplier cancelled) {
+        this(rootFolder, cancelled, "", GitIgnoreMatcher.EMPTY, VcsIgnoreProvider.NONE);
+    }
+
+    VirtualFileTreeBuilder(
+            @NotNull VirtualFile rootFolder,
+            @NotNull BooleanSupplier cancelled,
+            @NotNull VcsIgnoreProvider vcsIgnoreProvider
+    ) {
+        this(rootFolder, cancelled, "", GitIgnoreMatcher.EMPTY, vcsIgnoreProvider);
+    }
+
+    VirtualFileTreeBuilder(
+            @NotNull VirtualFile rootFolder,
+            @NotNull BooleanSupplier cancelled,
+            @NotNull String rootRelativePath,
+            @NotNull GitIgnoreMatcher inheritedMatcher
+    ) {
+        this(rootFolder, cancelled, rootRelativePath, inheritedMatcher, VcsIgnoreProvider.NONE);
+    }
+
+    VirtualFileTreeBuilder(
+            @NotNull VirtualFile rootFolder,
+            @NotNull BooleanSupplier cancelled,
+            @NotNull String rootRelativePath,
+            @NotNull GitIgnoreMatcher inheritedMatcher,
+            @NotNull VcsIgnoreProvider vcsIgnoreProvider
+    ) {
         this.rootFolder = rootFolder;
         this.cancelled = cancelled;
+        this.rootRelativePath = rootRelativePath;
+        this.inheritedMatcher = inheritedMatcher;
+        this.vcsIgnoreProvider = vcsIgnoreProvider;
     }
 
     @NotNull CheckboxTreeNode build() {
         CheckboxTreeNode rootNode = new CheckboxTreeNode(rootFolder.getName(), true);
-        GitIgnoreMatcher rootMatcher = loadRules(rootFolder, "", GitIgnoreMatcher.EMPTY);
+        GitIgnoreMatcher rootMatcher = loadRules(rootFolder, rootRelativePath, inheritedMatcher);
         Deque<BuildFrame> pending = new ArrayDeque<>();
-        pending.addLast(new BuildFrame(rootNode, rootFolder, "", rootMatcher));
+        pending.addLast(new BuildFrame(rootNode, rootFolder, rootRelativePath, rootMatcher));
 
         while (!pending.isEmpty()) {
             checkCancelled();
@@ -41,8 +74,10 @@ final class VirtualFileTreeBuilder {
                 boolean directory = child.isDirectory();
                 String relativePath = frame.relativePath().isEmpty()
                         ? child.getName() : frame.relativePath() + '/' + child.getName();
-                boolean ignored = frame.matcher().isIgnored(relativePath, directory);
-                CheckboxTreeNode childNode = new CheckboxTreeNode(child.getName(), directory);
+                boolean ignored = isIgnored(child, frame.matcher(), relativePath, directory);
+                CheckboxTreeNode childNode = ignored && directory
+                        ? new LazyDirectoryTreeNode(child.getName(), child, relativePath, frame.matcher())
+                        : new CheckboxTreeNode(child.getName(), directory);
                 if (ignored) {
                     childNode.setCheckState(CheckboxTreeNode.UNCHECKED, false, false);
                 }
@@ -56,6 +91,19 @@ final class VirtualFileTreeBuilder {
             }
         }
         return rootNode;
+    }
+
+    private boolean isIgnored(
+            VirtualFile file,
+            GitIgnoreMatcher fallbackMatcher,
+            String relativePath,
+            boolean directory
+    ) {
+        return switch (vcsIgnoreProvider.status(file)) {
+            case IGNORED -> true;
+            case NOT_IGNORED -> false;
+            case UNKNOWN -> fallbackMatcher.isIgnored(relativePath, directory);
+        };
     }
 
     private void checkCancelled() {
