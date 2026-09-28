@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Make large tree loading, selection, copying, and tab cleanup cancellable and memory-safe.
+- Apply ordered `.gitignore` rules while building the tree and skip ignored directory contents.
+
+### Added
+
+- Add streamed **Save Tree…** output for trees that exceed the clipboard safety limit.
+
 ## [1.1.0] - 2025-05-03
 
 - Changelog update - `v1.0.0` by @github-actions in https://github.com/HichemTab-tech/JetTreeMark/pull/26

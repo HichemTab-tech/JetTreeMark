@@ -2,6 +2,8 @@ package com.github.hichemtabtech.jettreemark.toolwindow;
 
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreeNode;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * A tree node that can be checked, unchecked or in an indeterminate state.
@@ -12,7 +14,7 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
     public static final int CHECKED = 1;
     public static final int INDETERMINATE = 2;
 
-    private int checkState = CHECKED; // Default to checked
+    private volatile int checkState = CHECKED; // Default to checked
 
     private final boolean isFolder;
 
@@ -23,6 +25,10 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
 
     public int getCheckState() {
         return checkState;
+    }
+
+    public boolean isFolder() {
+        return isFolder;
     }
 
     /**
@@ -58,13 +64,14 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
 
         checkState = state;
 
-        // Propagate checked/unchecked state to all children (not indeterminate)
+        // Keep this iterative: filesystem trees can be deeper than the Java stack.
         if (propagateToChildren && state != INDETERMINATE) {
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode) {
-                    ((CheckboxTreeNode) child).setCheckState(state, true, false);
-                }
+            Deque<CheckboxTreeNode> nodes = new ArrayDeque<>();
+            addChildren(this, nodes);
+            while (!nodes.isEmpty()) {
+                CheckboxTreeNode current = nodes.removeLast();
+                current.checkState = state;
+                addChildren(current, nodes);
             }
         }
 
@@ -91,30 +98,8 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
      * @param recursive whether to apply to all levels or just the current level
      */
     public void checkOnlyFolders(boolean recursive) {
-
-        checkState = CHECKED;
-
-        // Process children if recursive
-        if (recursive) {
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode && ((CheckboxTreeNode) child).isFolder) {
-                    ((CheckboxTreeNode) child).checkOnlyFolders();
-                }
-            }
-        } else {
-            // Just check/uncheck immediate children based on whether they are folders
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode checkboxChild) {
-                    if (checkboxChild.isFolder) {
-                        checkboxChild.setCheckState(CHECKED, false, false);
-                    } else {
-                        checkboxChild.setCheckState(UNCHECKED, false, false);
-                    }
-                }
-            }
-        }
+        checkState = isFolder ? CHECKED : UNCHECKED;
+        applyToDescendants(recursive, node -> node.checkState = node.isFolder ? CHECKED : UNCHECKED);
 
         // Update parent node
         TreeNode parent = getParent();
@@ -137,30 +122,9 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
      * @param recursive whether to apply to all levels or just the current level
      */
     public void checkOnlyFiles(boolean recursive) {
-
+        // Folders stay selected because they are required to render paths to selected files.
         checkState = CHECKED;
-
-        // Process children if recursive
-        if (recursive) {
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode) {
-                    ((CheckboxTreeNode) child).checkOnlyFiles();
-                }
-            }
-        } else {
-            // Just check/uncheck immediate children based on whether they are files
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode checkboxChild) {
-                    if (checkboxChild.getChildCount() == 0) {
-                        checkboxChild.setCheckState(CHECKED, false, false);
-                    } else {
-                        checkboxChild.setCheckState(UNCHECKED, false, false);
-                    }
-                }
-            }
-        }
+        applyToDescendants(recursive, node -> node.checkState = CHECKED);
 
         // Update parent node
         TreeNode parent = getParent();
@@ -184,37 +148,13 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
      */
     public void checkAll(boolean recursive) {
         checkState = CHECKED;
-
-        if (recursive) {
-            // Check all children recursively
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode) {
-                    ((CheckboxTreeNode) child).checkAll();
-                }
-            }
-        } else {
-            // Just check immediate children
-            for (int i = 0; i < getChildCount(); i++) {
-                Object child = getChildAt(i);
-                if (child instanceof CheckboxTreeNode) {
-                    ((CheckboxTreeNode) child).setCheckState(CHECKED, false, false);
-                }
-            }
-        }
+        applyToDescendants(recursive, node -> node.checkState = CHECKED);
 
         // Update parent node
         TreeNode parent = getParent();
         if (parent instanceof CheckboxTreeNode) {
             ((CheckboxTreeNode) parent).updateParentCheckState();
         }
-    }
-
-    /**
-     * Unchecks all nodes in the tree.
-     */
-    public void uncheckAll() {
-        uncheckAll(false);
     }
 
     /**
@@ -226,14 +166,7 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
         if (withSelf) {
             checkState = UNCHECKED;
         }
-
-        // Uncheck all children recursively
-        for (int i = 0; i < getChildCount(); i++) {
-            Object child = getChildAt(i);
-            if (child instanceof CheckboxTreeNode) {
-                ((CheckboxTreeNode) child).uncheckAll(true);
-            }
-        }
+        applyToDescendants(true, node -> node.checkState = UNCHECKED);
     }
 
     /**
@@ -243,33 +176,52 @@ public class CheckboxTreeNode extends DefaultMutableTreeNode {
      * If some children are checked and others are unchecked, this node will be indeterminate.
      */
     public void updateParentCheckState() {
-        if (getChildCount() == 0) {
-            return; // No children to check
-        }
+        CheckboxTreeNode current = this;
+        while (current != null && current.getChildCount() > 0) {
+            boolean allChecked = true;
+            boolean allUnchecked = true;
+            boolean hasCheckboxChild = false;
 
-        boolean allUnchecked = true;
-
-        for (int i = 0; i < getChildCount(); i++) {
-            Object child = getChildAt(i);
-            if (child instanceof CheckboxTreeNode checkboxChild) {
-                if (checkboxChild.getCheckState() == CHECKED) {
-                    allUnchecked = false;
+            for (int i = 0; i < current.getChildCount(); i++) {
+                if (current.getChildAt(i) instanceof CheckboxTreeNode child) {
+                    hasCheckboxChild = true;
+                    allChecked &= child.checkState == CHECKED;
+                    allUnchecked &= child.checkState == UNCHECKED;
                 }
             }
+
+            if (!hasCheckboxChild) {
+                return;
+            }
+
+            current.checkState = allChecked ? CHECKED : allUnchecked ? UNCHECKED : INDETERMINATE;
+            TreeNode parent = current.getParent();
+            current = parent instanceof CheckboxTreeNode checkboxParent ? checkboxParent : null;
         }
+    }
 
-        // Determine the new state
-        if (!allUnchecked) {
-            // Only update if the state would change (to avoid infinite recursion)
-            if (checkState != CHECKED) {
-                // Set state without propagating to children
-                checkState = CHECKED;
-
-                // Update parent node if needed
-                if (getParent() instanceof CheckboxTreeNode) {
-                    ((CheckboxTreeNode) getParent()).updateParentCheckState();
-                }
+    private void applyToDescendants(boolean recursive, NodeAction action) {
+        Deque<CheckboxTreeNode> nodes = new ArrayDeque<>();
+        addChildren(this, nodes);
+        while (!nodes.isEmpty()) {
+            CheckboxTreeNode current = nodes.removeLast();
+            action.apply(current);
+            if (recursive) {
+                addChildren(current, nodes);
             }
         }
+    }
+
+    private static void addChildren(CheckboxTreeNode node, Deque<CheckboxTreeNode> target) {
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (node.getChildAt(i) instanceof CheckboxTreeNode child) {
+                target.addLast(child);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface NodeAction {
+        void apply(CheckboxTreeNode node);
     }
 }

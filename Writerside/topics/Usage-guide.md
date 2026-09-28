@@ -20,5 +20,7 @@ Learn how to generate and copy a tree view of your project structure in just a f
 
 - Once satisfied, click on the **"Copy Tree"** button at the bottom.
 - The full tree will be copied to your clipboard!
+- For very large trees, click **"Save Tree…"** to stream the output to a UTF-8 text file without
+  placing the whole result on the clipboard.
 
 You can now paste it wherever you need — in documents, GitHub issues, code reviews, or chats. 🚀
