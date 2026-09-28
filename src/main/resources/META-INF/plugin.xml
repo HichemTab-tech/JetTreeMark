@@ -3,7 +3,7 @@
     <id>com.github.hichemtabtech.jettreemark</id>
     <name>JetTreeMark</name>
     <vendor email="hichem.tab2002@gmail.com" url="https://github.com/HichemTab-tech">HichemTab-tech</vendor>
-    <version>1.1.1</version>
+    <version>1.2.0</version>
 
     <description><![CDATA[
 JetTreeMark is a plugin for IntelliJ IDEA that enhances project collaboration by generating a clean,
@@ -20,10 +20,11 @@ The intuitive features save time and improve your workflow.
 ]]></description>
 
     <change-notes><![CDATA[
-      <h3>1.1.1</h3>
+      <h3>1.2.0</h3>
       <ul>
-        <li>Compatibility fixes
-        </li>
+        <li>Improved performance and memory safety for very large trees.</li>
+        <li>Use IDE VCS ignore status and lazily load ignored directories.</li>
+        <li>Add streamed tree export for output too large for the clipboard.</li>
       </ul>
     ]]></change-notes>
 
