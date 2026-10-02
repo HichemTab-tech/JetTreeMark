@@ -5,7 +5,7 @@ junit = "4.13.2"
 # plugins
 changelog = "2.5.0"
 intelliJPlatform = "2.19.0"
-qodana = "2026.2.1"
+qodana = "2026.2.2"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
